@@ -1,4 +1,3 @@
-from .panel_form import _VariableForm
 from .variable_node import (
     VARIABLE_TYPE_NUMBER,
     VARIABLE_TYPE_TEXT,
@@ -10,7 +9,6 @@ from .variable_node import (
 )
 
 __all__ = [
-    "_VariableForm",
     "VARIABLE_TYPE_NUMBER",
     "VARIABLE_TYPE_TEXT",
     "VARIABLE_TYPE_OPTIONS",

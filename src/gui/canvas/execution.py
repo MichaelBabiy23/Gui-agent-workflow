@@ -569,22 +569,10 @@ class _ExecutionMixin:
         worker.start()
 
     def _fire_attention(self: "WorkflowCanvas", node: AttentionNode, exec_id: int,
-                        lineage_token: str = "", loop_token: str = "", join_token: str = ""):
+                         lineage_token: str = "", loop_token: str = "", join_token: str = ""):
         run_id = self._run_id
         message = node.message_text.strip()
-        QApplication.beep()
-        dialog = QMessageBox(self)
-        dialog.setIcon(QMessageBox.Icon.Warning)
-        dialog.setWindowTitle("Attention Required")
-        dialog.setText(node.title)
-        dialog.setInformativeText(message)
-        continue_button = dialog.addButton(
-            "Continue Workflow", QMessageBox.ButtonRole.AcceptRole
-        )
-        dialog.addButton(
-            "Stop Workflow", QMessageBox.ButtonRole.RejectRole
-        )
-        dialog.setDefaultButton(continue_button)
+        attention_handler = getattr(self, "on_attention_requested", None)
         # While the workflow is blocked waiting for the user to respond, let the
         # machine sleep; re-arm sleep prevention once the user has answered and
         # any other branches/workers keep running.
@@ -592,11 +580,28 @@ class _ExecutionMixin:
         if was_preventing:
             allow_sleep()
         try:
-            dialog.exec()
+            if attention_handler is not None:
+                should_continue = bool(attention_handler(node, message))
+            else:
+                QApplication.beep()
+                dialog = QMessageBox(self)
+                dialog.setIcon(QMessageBox.Icon.Warning)
+                dialog.setWindowTitle("Attention Required")
+                dialog.setText(node.title)
+                dialog.setInformativeText(message)
+                continue_button = dialog.addButton(
+                    "Continue Workflow", QMessageBox.ButtonRole.AcceptRole
+                )
+                dialog.addButton(
+                    "Stop Workflow", QMessageBox.ButtonRole.RejectRole
+                )
+                dialog.setDefaultButton(continue_button)
+                dialog.exec()
+                should_continue = dialog.clickedButton() is continue_button
         finally:
             if was_preventing and self._running:
                 prevent_sleep()
-        if dialog.clickedButton() is not continue_button:
+        if not should_continue:
             if exec_id not in self._active_workers:
                 return
             self._retired_exec_ids.discard(exec_id)

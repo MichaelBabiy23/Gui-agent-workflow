@@ -1,7 +1,7 @@
 # canvas Developer Guide
 
 ## Purpose
-The `canvas/` subpackage houses `WorkflowCanvas` and its behavior mixins. Splitting the behavior across focused modules keeps each file under the file-size cap while preserving `WorkflowCanvas` as the single public class.
+The `canvas/` subpackage houses `WorkflowCanvas` and its behavior mixins. The Electron runtime bridge creates this canvas in an offscreen Qt application and uses it as the authoritative graph and execution engine. Splitting behavior across focused modules keeps each file under the file-size cap.
 
 ## Files
 - `__init__.py`: `WorkflowCanvas(_SubprocessExecutionMixin, _ExecutionMixin, _SessionStateMixin, _VariableMixin, _IOMixin, QGraphicsView)` owns initialization, background grid, start-node creation, node and connection CRUD, panel commit handlers, mouse and keyboard event handling, connection drawing, connection-vertex editing interactions, prompt-injection state, node-specific prompt composition, and the undo stack. New LLM nodes default to `PREFERRED_DEFAULT_LLM_MODEL_ID` (`big-pickle`) when that id is still in the catalog.
@@ -52,7 +52,7 @@ The `canvas/` subpackage houses `WorkflowCanvas` and its behavior mixins. Splitt
 ## Attention, Git, And Script Execution
 - `WorkflowCanvas.add_attention_node()` creates `AttentionNode` snapshots with a user-facing `message` field so save/load, undo, and paste treat the node like any other built-in node type.
 - `WorkflowCanvas.add_variable_node()` creates `VariableNode` snapshots with a Python-style variable name, a `text` or `number` type, and the raw value string.
-- `_ExecutionMixin._fire_attention()` opens a modal `QMessageBox` and fans out only when the user clicks Continue. It is a single-branch gate, not a global pause.
+- `_ExecutionMixin._fire_attention()` asks the canvas's `on_attention_requested` handler when one is set. The desktop bridge uses that handler to show an Electron decision dialog and keeps the Qt event loop running while it waits. It is a single-branch gate, not a global pause.
 - `_VariableMixin._fire_variable_node()` runs synchronously on the UI thread, updates the current lineage's variable map, writes a short node output line, and then continues normal fan-out.
 - `_ExecutionMixin._fire_condition_check()` resolves a file path only when `condition_requires_filename(condition_type)` is true, then dispatches based on `condition_execution_mode(condition_type)`: `"git_worker"` conditions are routed to `_fire_git_changes_condition()`, which runs `git status --porcelain --untracked-files=all` with a 15-second timeout; `"sync"` conditions call `node.evaluate()` on the UI thread.
 - `_SubprocessExecutionMixin._resolve_project_relative_path()` is the shared confinement rule for file ops, git commit-message files, and script paths. Script paths must stay inside the selected project folder and end in `.bat`, `.cmd`, or `.ps1`.

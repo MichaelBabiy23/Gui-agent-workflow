@@ -25,3 +25,8 @@ env/
 
 # IDE settings
 .idea/
+
+# Desktop build and dependency artifacts
+desktop/node_modules/
+desktop/dist/
+desktop/.vite/

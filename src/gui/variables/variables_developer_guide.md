@@ -1,14 +1,16 @@
-# variables Developer Guide
+# Variable Node Developer Guide
 
 ## Purpose
-`variables/` contains the variable-node UI pieces used for downstream prompt substitution in LLM nodes.
+
+`variables/` defines workflow variables used by downstream LLM prompts. The desktop inspector edits the serialized fields, and canvas runtime carries values per execution lineage.
 
 ## Files
-- `variable_node.py`: `VariableNode` graphics item plus validation helpers for Python-style variable names and numeric values.
-- `panel_form.py`: `_VariableForm`, the properties-panel editor for variable title/name/type/value and non-blocking warning text.
-- `__init__.py`: Convenience re-exports for the variable node package.
+
+- `variable_node.py`: `VariableNode` graphics item, JSON fields, and validation helpers.
+- `__init__.py`: Exports the node and helper functions.
 
 ## Rules
-- Variable names follow Python identifier rules and reject keywords.
-- The node stores the raw user-entered value string even when the type is `number`; numeric validation only checks that the string parses as a number.
-- Variable substitution is downstream-only and currently applies only to LLM prompt text.
+
+- Variable names use Python identifier syntax and reject keywords.
+- A value is stored as the entered string. A `number` value must parse as a number before a workflow can run.
+- Downstream prompt substitution follows directed graph reachability. Fan-out copies lineage variables, and joins merge them conservatively.

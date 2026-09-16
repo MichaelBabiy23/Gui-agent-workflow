@@ -13,7 +13,7 @@ Import from the package, not the module:
 from src.platform_power import prevent_sleep, allow_sleep, sleep_prevented
 ```
 
-- `prevent_sleep()`: keep the system and display awake. Idempotent.
+- `prevent_sleep()`: keep the system awake. The display may still turn off. Idempotent.
 - `allow_sleep()`: restore the OS's normal idle sleep/timeout behavior. Idempotent.
 - `sleep_prevented() -> bool`: True while sleep is currently being prevented.
 
@@ -33,7 +33,7 @@ OS resets the execution state automatically when the process exits, so no
 shutdown cleanup is required.
 
 ## Who Calls It
-- `src/gui/main_window.py` `_on_run_state_changed(running)`: calls
+- `src/bridge/server.py` `_run_state_changed(running)`: calls
   `prevent_sleep()` when the canvas `run_state_changed` signal reports a run
   started, and `allow_sleep()` when it reports the run stopped/finished.
 - `src/gui/canvas/execution.py` `_fire_attention(...)`: while the modal

@@ -1,78 +1,35 @@
-# gui Developer Guide
+# Graph And Execution Developer Guide
 
 ## Purpose
-Implements the interactive Qt UI for composing and running LLM workflows.
 
-## Contents
-- `main_window.py`: Main shell with File/Prompt menus, toolbar, and status bar. Hosts `WorkflowCanvas` and `PropertiesPanel` in a horizontal `QSplitter`, restores and saves panel width and panel text zoom with `QSettings`, keeps the side panel permanently visible, drives node-vs-overview mode from `canvas.selection_changed`, applies prompt injections before each run, and handles save/load/clear/project-folder flows. It also handles usage-limit dialogs and the run-time prompt that appears when a loaded workflow already contains saved LLM sessions.
-- `llm_sessions/`: Helper package for workflow-overview rendering, LLM form session-widget loading, and workflow-level named-session rules. See `llm_sessions/llm_sessions_developer_guide.md` for its local developer guide.
-- `llm_chat/`: Chat transcript and per-node conversation-set models plus the native Qt reproduction of the Skylyx code-tab chat used as the LLM node Output page (header, conversation tabs, user bubbles, activity rows, markdown assistant text). See `llm_chat/llm_chat_developer_guide.md`.
-- `dialogs/`: Modal dialog classes for runtime user notifications and prompt-injection setup.
-- `canvas/` subpackage: Houses `WorkflowCanvas` plus execution, IO, subprocess, and named-session state mixins.
-- `control_flow/`: Coordination-oriented nodes such as `JoinNode`.
-- `llm_node.py`: Shared graphics-item base plus `LLMNode` and `StartNode`. `WorkflowNode` carries `is_invalid`; invalid nodes render a red border while not actively running or looping. `LLMNode` displays the chosen model's provider logo in its header and owns `conversations: ChatConversations` (one `ChatTranscript` per real CLI chat) that `clear_output()` resets.
-- `checked_dropdown.py`: Reusable checked popup dropdown used by per-node prompt-template selection controls.
-- `llm_widget.py`: `ModelSelector`, model list widget, provider icon helpers, catalog variant lookup helpers (`variant_options_for`, `default_variant_for`), `populate_model_selector` (one row per catalog model, without variants, listing only providers whose CLI is installed; `rescan=True` re-detects first), and `missing_cli_message()` for the form's not-installed note. `ModelSelector.set_model_id` keeps a stored id whose provider CLI is missing and shows its label with a "CLI not installed" suffix instead of clearing it.
-- `variables/`: Variable-node package with the graphics item, validation helpers, and variable form widget.
-- `file_op_node.py`: `FileOpNode` plus convenience factories and `AttentionNode`.
-- `git_action_node.py`: Compact node for git operations with action/message settings.
-- `panel_forms/`: Form widget classes used by `PropertiesPanel`, split into `llm_form.py` (the LLM-call form with its Settings/Output pages) and `node_forms.py` (file-op, conditional, loop, join, git-action, attention, and script forms).
-- `properties_panel.py`: Resizable side panel with `_OverviewForm` and per-node forms. The stacked panel switches among overview, LLM, file-op, conditional, loop, join, git-action, attention, script, and variable forms. Every form except the LLM form is wrapped in a scroll area; the LLM form fills the panel itself because its Output page is a full-height chat. Ctrl+wheel zoom resizes form fonts and maps onto the chat's text scale (1.0 at the default zoom).
-- `properties_panel_node_helpers.py`: Non-LLM node form loaders plus output-routing helpers for the side panel. LLM output does not pass through here; the conversation tabs subscribe to the node's conversation set directly.
-- `workflow_io.py`: Pure serialization and validation helpers.
-- `conditional_node.py`: `ConditionalNode` and condition registry metadata.
-- `loop_node.py`: `LoopNode` with loop/done output ports.
-- `control_flow/join_node.py`: `JoinNode`, a barrier node that waits for a configured number of arrivals before releasing once.
-- `script_runner/`: Script execution node package with `ScriptNode`.
-- `connection_item.py`: Directed edge item carrying `source_port`, optional manual bend vertices, and connection-segment/handle hit targets for vertex editing.
-- `undo_commands.py`: `QUndoCommand` implementations for graph mutations.
-- `project_chooser.py`: Startup dialog for selecting and persisting project folders.
-- `assets/`: Static logo files used by the model selector.
+`src/gui/` holds the Qt graph objects and workflow behavior used by the Python runtime. The Electron editor talks to these objects through `src/bridge/server.py`; it does not construct Qt widgets in the visible window.
 
-## Key Interactions
-- Model selection is two-stage: the Model dropdown lists one row per catalog model; picking one reveals an Effort dropdown preloaded with that model's variants (reasoning efforts) when the catalog entry declares any. Models without variants (OpenCode free models) hide the Effort dropdown. The node stores the composed `<model>:<variant>` id; user-driven changes to either control emit the panel's `model_changed` signal once per effective change.
-- The panel remains visible at all times. With exactly one selected workflow node it shows that node form; with exactly one selected connection it shows an arrow-focused overview; otherwise it shows the workflow overview page.
-- Overview data is maintained by `MainWindow` and includes working directory, connection count, selected counts, node counts by type, invalid node titles, prompt injection payload, resumable LLM count, and saved-session count.
-- Before any run, reachable nodes are validated with node-type rules (`LLMNode`, `VariableNode`, `FileOpNode`, `ConditionalNode`, `AttentionNode`, `LoopNode`, `JoinNode`, `GitActionNode`, `ScriptNode`).
-- The same validation rules drive live node highlighting: invalid nodes get a red border until required fields are valid.
-- Installed provider CLIs are detected at startup (see `src/llm/cli_detection.py`). The Model dropdown lists only installed providers, the LLM form shows a `Not installed: ...` note with a `Rescan` button when any are missing, and run validation blocks LLM nodes whose model needs a missing CLI.
-- Prompt injection preview in selected LLM forms stays aligned with the current preview or active run context plus the selected node's saved prepend/append template overrides, and applies any uniquely-resolved reachable upstream `$name` substitutions inside the node prompt text.
-- `JoinNode` is a barrier: it waits for `wait_for_count` arrivals from the same parallel split group before it releases one downstream continuation.
+## Active Runtime Map
 
-## LLM Profile UI Rules
-- The LLM form shows a `Profile` dropdown only for providers that support profiles (Claude, Codex). It is hidden for Grok and OpenCode.
-- Options come from `src.llm.profiles.discover_profiles`. The first entry is always `Default account` (empty value) which runs the CLI with no environment override. The default config dir (`~/.codex`, `~/.claude`) is labeled `<name> (default)`.
-- The selection is stored on the node as `profile_name` and resolved to an env overlay at run time in `execution.py`. A saved profile name that no longer exists on disk falls back to the default selection.
-- Switching a node's model to a different provider refreshes the dropdown; because Claude and Codex profile names are disjoint, a stale selection resets to the default.
-- Claude's catalog entries are Fable 5.1, Opus 5, and Sonnet 5; each entry declares reasoning-effort variants, and the form's Effort dropdown writes the chosen variant into the saved `<model>:<effort>` id suffix that the provider maps to Claude Code's `--effort` flag at run time.
+- `canvas/`: `WorkflowCanvas`, graph mutations, execution, validation, sessions, variables, and subprocess coordination.
+- `workflow_io.py`: Workflow JSON parsing, validation, and serialization helpers.
+- `llm_node.py`: Base graph item, permanent Start node, LLM node state, and visual status fields.
+- `file_op_node.py`, `conditional_node.py`, `loop_node.py`, `git_action_node.py`, `control_flow/`, `script_runner/`, `variables/`: Built-in graph item types.
+- `connection_item.py`: Directed connections, source ports, and manual bend points.
+- `undo_commands.py`: Qt command implementations used by canvas graph methods. The desktop bridge also keeps whole-graph snapshots for editor undo and redo.
+- `llm_chat/`: Conversation and transcript models fed by provider stream events.
+- `llm_sessions/`: Named-session filtering, ownership, and sharing rules.
+- `llm_widget.py`: Shared model lookup and provider icon helpers used by graph items.
 
-## LLM Session UI Rules
-- Claude, Codex/OpenAI, Grok, and OpenCode models show three base controls: `Resume previous session`, `Save session ID`, and `Resume session ID`.
-- Models without session-resume support hide the entire session-controls block, and any hidden session settings are cleared during reconciliation.
-- `Resume previous session` remains node-local and undoable.
-- `Save session ID` reserves a workflow-level name for the current node. The name is typed by the user and can only be owned by one node at a time.
-- When `Save session ID` is enabled, the form reveals `Restart session ID at this node`. That checkbox is persisted on the node, hidden again when saving is disabled, and causes the node to start fresh on each run before overwriting its saved named session after a successful call.
-- `Resume session ID` only lists names that already have a captured session ID, match the selected node's provider, and come from a save-owner node that can reach the current node through the graph.
-- Connection edits while an LLM node is selected must refresh that dropdown immediately; the user should not need to reselect the node after wiring a newly valid upstream path.
-- Selecting `Resume session ID` disables named-session saving on that node because the resumed named conversation becomes the active session source.
-- Restart does not clear the workflow-level named session preemptively. Other branches keep using the previously saved ID until they reach the restarting save-owner node and that node overwrites the session after its fresh call completes.
-- Changing a node's model while it owns saved session data prompts first; on confirmation, incompatible saved session IDs are cleared and named-session references are reconciled.
-- Loading a workflow with saved node or named sessions does not prompt immediately. The prompt appears only when the user starts a run.
-- Choosing `Start Fresh` on that prompt clears all captured node and named session IDs from the in-memory workflow.
-- Saved workflows that still contain older Claude model IDs are normalized onto the current Claude aliases during load and provider lookup, so existing graphs remain runnable after catalog updates.
+## Graph Rules
 
-## Behavior Notes
-- The Start node is permanent and recreated after Clear Canvas.
-- Run Selected fires only selected node(s) without fan-out. Run From Here fires the selected node and descendants.
-- Usage-limit dialogs can schedule auto-resume from the failed node. A scheduled auto-resume is canceled if any workflow run starts before the timer fires.
-- Mouse-wheel zoom is active on canvas except while the model dropdown is open.
-- Selected connections expose bend handles. Double-click a segment to add a vertex, drag a handle to move it, and Shift+click a handle to remove it.
-- Manual connection vertices are persisted in workflow JSON as `connections[].vertices` and participate in undo/redo, paste, and load flows.
-- The LLM Output page shows one chat tab per real CLI conversation (`Chat 1`, `Chat 2`, ...). Each chat is a transcript: one user bubble per call (the full composed prompt), live tool-activity rows while the CLI works, assistant markdown replies, and diagnostics. A call that resumes a captured session id continues the tab holding that id; any other call (loop iterations or reruns without resume, session restarts, non-resumable providers) opens a new tab. A call on the selected node switches the form to Output and to that chat's tab automatically; the Settings/Output choice otherwise persists while switching nodes.
-- Workflow-named LLM sessions share one in-memory conversation history across the save-owner and every resume node using that same session name; user bubbles in shared chats show the sending node's title above them.
-- LLM conversations are cleared at run start unless the node resumes an existing session, in which case the new call continues that chat as another turn.
-- Each `LLMNode` has checked `Prepend` and `Append` dropdowns listing every saved prompt template. Saved global default templates appear selected in both dropdowns by default; the node stores only local additions and per-side opt-outs from that default set, while prompt preview can still reflect transient next-run injection state.
-- `VariableNode` stores `variable_name`, `variable_type`, and `variable_value`. Later variable nodes with the same name overwrite the earlier value on downstream branches, and the variable form shows a yellow non-blocking warning when the selected node overwrites an upstream definition.
-- Ctrl+mouse-wheel inside properties panel changes panel text size.
-- Properties panel output areas stream execution output for the currently selected node; for LLM nodes the stream is folded into the call's chat transcript on the GUI thread.
-- Copy/paste generates a new node identity and never carries over a saved CLI session ID or named-session binding to the pasted node.
+Start is permanent. Run All validates all reachable nodes and starts its direct children. Run Selected starts selected nodes without downstream fan-out. Run From Here starts one node and its descendants. Condition and loop nodes expose named source ports; all other source nodes use `output`.
+
+Node validation drives both run blocking and `is_invalid` status shown by the editor. `WorkflowCanvas.load_workflow_data()` restores nodes, connections, manual vertices, and workflow-named sessions. `get_workflow_data()` produces the same JSON shape for saving.
+
+LLM nodes store their model, prompt, profile, per-node prompt-template overrides, and resumable session metadata. The execution engine composes variable substitutions and prompt injections, then calls the provider in `LLMWorker`. Structured provider events update conversation models while calls run. Calls sharing a resumed CLI session are serialized.
+
+The selected project folder is set through `WorkflowCanvas.set_working_directory()`. File operations, scripts, git actions, and provider calls use that folder. The canvas confines project-relative file and script paths before execution.
+
+## Attention And Output
+
+An attention node blocks only its own branch while awaiting a decision. The canvas calls `on_attention_requested` when the bridge supplies it, allowing the Electron dialog to answer through the protocol. Other branches and workers continue in the Qt event loop.
+
+Non-LLM nodes keep plain-text output. LLM nodes keep one transcript per real provider conversation, including prompt, assistant, tool, and diagnostic items. Named-session participants share the same conversation history.
+
+Read the folder-specific guide before editing a subpackage.

@@ -1,0 +1,33 @@
+{
+  "name": "gui-workflow-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build": "vite build",
+    "start": "electron .",
+    "lint": "eslint src main.cjs preload.cjs"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.10.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "concurrently": "^9.1.2",
+    "electron": "^44.4.1",
+    "eslint": "^9.20.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.9.7",
+    "vite": "^7.0.0",
+    "wait-on": "^8.0.0"
+  }
+}

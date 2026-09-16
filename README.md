@@ -1,146 +1,37 @@
 # GUI Workflow
 
-A visual node-graph editor for chaining LLM calls, file operations, git actions, scripts, and control-flow nodes in a desktop PySide6 app.
+A desktop studio for visual LLM workflows. Connect nodes, configure their work, and watch runs unfold live.
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
-![PySide6](https://img.shields.io/badge/PySide6-6.7+-green?logo=qt&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey?logo=windows)
+![GUI Workflow desktop editor](screen%20shot/screenshot%201.png)
 
----
+## Get started
 
-![screenshot](screen%20shot/screenshot%201.png)
+On Windows, run `run_gui_workflow.bat`. The launcher installs missing Python dependencies and desktop packages, builds the editor, and opens the app. You need Python 3.11 or newer, Node.js with npm, and any provider CLIs you plan to use.
 
----
+You can also run `python workflow_entry.py`. For editor development, run `npm run dev` in `desktop/` after `npm install`.
 
-## What It Does
+Choose a project folder before running a workflow. Provider, git, and script commands run in that folder.
 
-Build workflows visually. Connect nodes. Run them.
+## Build a workflow
 
-Each node does one job. LLM nodes call Claude, Codex/OpenAI, Grok, or OpenCode models. Other nodes handle files, conditions, loops, joins, git actions, attention pauses, and scripts.
+Use the node library to add LLM calls, file operations, variables, conditions, loops, joins, git actions, scripts, and attention prompts. Drag from an output port to an input port to connect steps. Select a node to edit its settings in the inspector. Run All begins at Start; Run Selected runs only selected nodes; Run From Here runs a selected node and its descendants.
 
-## Node Types
+The canvas supports panning, zooming, multi-selection, connection bend points, undo and redo, and copy and paste. Double-click a connection to add a bend point. Drag a selected point to move it; Shift-click it to remove it.
 
-| Node | What it does |
-|------|-------------|
-| **LLM** | Calls a Claude, Codex/OpenAI, Grok, or OpenCode model with a prompt. Resumable providers can optionally continue their previous session context. |
-| **File Op** | Creates, truncates, or deletes a file in the project folder. |
-| **Conditional** | Evaluates a condition and routes to a true or false branch. |
-| **Attention** | Stops on that branch and asks the user whether to continue. |
-| **Loop** | Fires its loop port N times, then fires its done port once. |
-| **Join** | Waits for a configured number of arrivals before releasing one continuation. |
-| **Git Action** | Runs `git add`, `git commit`, or `git push`. |
-| **Script** | Runs a project-relative `.bat`, `.cmd`, or `.ps1` script. |
-| **Start** | The permanent root node. Run All always begins here. |
+## Save and run
 
-## Supported LLMs
+Open and save workflow JSON files from the title bar. Existing workflow JSON files open in the desktop editor with their nodes, connections, manual bends, model settings, prompt-template overrides, and session metadata. Saved CLI sessions can resume on the next run or start fresh.
 
-| Provider | Models |
-|----------|--------|
-| **Claude** | Fable 5.1, Opus 5, and Sonnet 5 with `low` / `medium` / `high` / `xhigh` / `max` effort (per-model ladder) |
-| **Codex / OpenAI** | GPT-6 Astra (through `max`) plus GPT-5.6 Sol, Terra, and Luna (Sol/Terra through `ultra`) |
-| **Grok** | Grok 4.6 (`low`–`xhigh`) and Grok 4.5 (`low`–`high`) |
-| **OpenCode** | Free OpenCode Zen models: Big Pickle, MiMo-V2.5 Free, Ling 3.0 Flash Fin Free, Nemotron 3 Ultra/3.5 Lightning Free, Muse Spark 1.3 Contributor Free |
+LLM output appears as conversation tabs in the inspector. Prompts, assistant messages, tool activity, and diagnostics update during a run. Other nodes show a text log. Attention nodes ask whether their branch should continue. Provider usage-limit errors offer a model change or scheduled resume.
 
-All providers run as CLI subprocesses.
+Prompt templates and one-time context are available from the menu in the title bar. Templates can be set as defaults or selected per LLM node. Claude and Codex nodes can choose a discovered account profile.
 
-Pick a model first, then choose the reasoning effort from the dependent Effort dropdown that appears for models with variants. Models without variants (the OpenCode free models) skip that step.
+## Structure
 
-Session resume (`Resume previous session`) is available for Claude, Codex/OpenAI, Grok, and OpenCode models; other selections disable and clear it.
+- `desktop/`: Electron window and React Flow editor.
+- `src/bridge/`: Local message bridge between the editor and runtime.
+- `src/gui/`: Graph objects, workflow validation, execution, and JSON handling.
+- `src/llm/`: Provider CLIs, model catalogs, profiles, and prompt templates.
+- `src/workers/`: Background subprocess workers.
 
-## Getting Started
-
-```bash
-pip install PySide6
-python workflow_entry.py
-```
-
-Or launch `run_gui_workflow.bat` on Windows. The batch launcher checks for `PySide6`, bootstraps `pip` if needed, and installs `requirements.txt` automatically before retrying the app.
-
-On first launch, choose a project folder. LLM, git, and script subprocesses run with that folder as their working directory.
-
-## Run Modes
-
-| Mode | What runs |
-|------|-----------|
-| **Run All** | Validates the reachable graph from Start and runs it. |
-| **Run Selected** | Runs only the selected node(s) without fan-out. |
-| **Run From Here** | Runs the selected node and its descendants. |
-
-## LLM Session Resume
-
-When `Resume previous session` is enabled on an LLM node:
-
-- The first resumable call starts fresh and stores the returned session ID in the workflow JSON.
-- Later calls from that same node automatically resume the saved session so the model keeps context.
-- If the same resumable node is reached in parallel, later invocations wait until the earlier one finishes so the conversation stays linear.
-- If you load a workflow that already contains saved LLM sessions, the next run asks whether to resume those saved sessions or delete them and start fresh.
-- If you change the model on a node that already has a saved session, the app warns first. Approving the change deletes that node's saved session.
-- Copy/paste does not clone a live provider session. Pasted LLM nodes start with no saved provider session ID.
-
-## Canvas Controls
-
-| Action | How |
-|--------|-----|
-| Add node | Toolbar buttons |
-| Connect nodes | Drag from an output port to an input port |
-| Select multiple | Left-drag rubber-band |
-| Pan | Right-drag |
-| Zoom | Mouse wheel |
-| Edit node | Select it and use the Properties Panel |
-| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
-| Copy / Paste | `Ctrl+C` / `Ctrl+V` |
-| Delete | `Delete` or `Backspace` |
-
-## Saving Workflows
-
-`File -> Save Workflow` writes a `.json` file you can reload later.
-
-The JSON stores:
-
-- `nodes[]`
-- `connections[]`
-- `node_counter`
-- `start_pos`
-
-LLM nodes can also store:
-
-- `resume_session_enabled`
-- `save_session_enabled`
-- `save_session_name`
-- `resume_named_session_name`
-- `saved_session_id`
-- `saved_session_provider`
-
-Workflow JSON can also store:
-
-- `named_sessions[]`
-
-## Project Structure
-
-```text
-GUI Workflow/
-|-- workflow_entry.py
-|-- run_gui_workflow.bat
-|-- requirements.txt
-`-- src/
-    |-- llm/
-    |-- workers/
-    `-- gui/
-        |-- canvas/
-        |-- dialogs/
-        |-- main_window.py
-        |-- llm_node.py
-        |-- file_op_node.py
-        |-- conditional_node.py
-        |-- loop_node.py
-        |-- git_action_node.py
-        |-- connection_item.py
-        |-- properties_panel.py
-        `-- panel_forms/
-```
-
-## Requirements
-
-- Python 3.11+
-- PySide6 >= 6.7.0
-- CLI tools installed for the providers you want to use: `claude`, `codex`, `grok`, `opencode`
+See [gui_workflow_developer_guide.md](gui_workflow_developer_guide.md) for architecture and development checks.
