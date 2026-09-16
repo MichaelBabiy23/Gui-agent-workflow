@@ -41,6 +41,7 @@ from src.gui.workflow_io import get_provider_for_model
 from src.gui.canvas.execution import _ExecutionMixin
 from src.gui.canvas.io import _IOMixin
 from src.gui.canvas.session_state import _SessionStateMixin
+from src.gui.canvas.validation import _ValidationMixin
 from src.gui.canvas.subprocess_execution import _SubprocessExecutionMixin
 from src.gui.canvas.variables import _VariableMixin
 from src.gui.variables import VariableNode
@@ -61,7 +62,8 @@ class _ExecutionSignals(QObject):
 
 
 class WorkflowCanvas(
-    _SubprocessExecutionMixin, _ExecutionMixin, _SessionStateMixin, _VariableMixin, _IOMixin, QGraphicsView
+    _SubprocessExecutionMixin, _ExecutionMixin, _ValidationMixin, _SessionStateMixin, _VariableMixin, _IOMixin,
+    QGraphicsView
 ):
     status_update = Signal(str)
     selection_changed = Signal()

@@ -27,8 +27,8 @@ def load_llm_form(panel, node) -> None:
 
     from src.gui.canvas.llm_output import llm_session_label, llm_shared_session_name
 
-    form.bind_transcript(
-        node.transcript,
+    form.bind_conversations(
+        node.conversations,
         title=node.title,
         session_label=llm_session_label(node),
         shared=bool(llm_shared_session_name(node)),

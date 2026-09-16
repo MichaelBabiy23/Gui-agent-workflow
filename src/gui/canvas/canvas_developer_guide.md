@@ -1,12 +1,13 @@
 # canvas Developer Guide
 
 ## Purpose
-The `canvas/` subpackage houses `WorkflowCanvas` and its four behavior mixins. Splitting the behavior across focused modules keeps each file under the file-size cap while preserving `WorkflowCanvas` as the single public class.
+The `canvas/` subpackage houses `WorkflowCanvas` and its behavior mixins. Splitting the behavior across focused modules keeps each file under the file-size cap while preserving `WorkflowCanvas` as the single public class.
 
 ## Files
 - `__init__.py`: `WorkflowCanvas(_SubprocessExecutionMixin, _ExecutionMixin, _SessionStateMixin, _VariableMixin, _IOMixin, QGraphicsView)` owns initialization, background grid, start-node creation, node and connection CRUD, panel commit handlers, mouse and keyboard event handling, connection drawing, connection-vertex editing interactions, prompt-injection state, node-specific prompt composition, and the undo stack. New LLM nodes default to `PREFERRED_DEFAULT_LLM_MODEL_ID` (`big-pickle`) when that id is still in the catalog.
-- `execution.py`: `_ExecutionMixin` contains run/stop logic, graph traversal, validation, and the core invocation engine (`_fire_invocation`, `_fire_condition_check`, `_fire_attention`, `_fire_loop`, `_fire_join`). It also owns usage-limit detection, session capture persistence, serialization for any resumed LLM conversation key (node-local or workflow-named), and the LLM turn lifecycle: each invocation gets a `turn_id`, live `StreamEvent`s from `LLMWorker.stream_event` are applied to the transcript, and the worker's finished/error signals close the turn as completed, failed, or interrupted (cancelled, retired, or stale-run callbacks). `_drop_exec` waits for a finishing `QThread` before releasing it because workers emit their terminal signal from inside `run()`.
-- `llm_output.py`: Plain-text log helpers for non-LLM nodes plus the LLM transcript helpers (`start_llm_turn`, `apply_llm_stream_event`, `finish_llm_turn`, `add_llm_note`, `interrupt_all_llm_turns`, `llm_history_kept_on_run`, `llm_session_label`). All of them mirror across every LLM node sharing the same workflow session name.
+- `execution.py`: `_ExecutionMixin` contains run/stop logic, graph traversal, and the core invocation engine (`_fire_invocation`, `_fire_condition_check`, `_fire_attention`, `_fire_loop`, `_fire_join`). It also owns usage-limit detection, session capture persistence, serialization for any resumed LLM conversation key (node-local or workflow-named), and the LLM turn lifecycle: each invocation first picks its conversation (`begin_llm_conversation` with the session id it will resume), gets a `turn_id`, has live `StreamEvent`s from `LLMWorker.stream_event` applied to that conversation, and the worker's finished/error signals record the captured session id on the conversation and close the turn as completed, failed, or interrupted (cancelled, retired, or stale-run callbacks). The `conversation_id` travels through the worker closures next to `turn_id`. `_drop_exec` waits for a finishing `QThread` before releasing it because workers emit their terminal signal from inside `run()`.
+- `llm_output.py`: Plain-text log helpers for non-LLM nodes plus the LLM conversation helpers (`begin_llm_conversation`, `record_llm_session_id`, `start_llm_turn`, `apply_llm_stream_event`, `finish_llm_turn`, `add_llm_note`, `interrupt_all_llm_turns`, `llm_history_kept_on_run`, `llm_session_label`). Every operation takes a `conversation_id` (notes may omit it and land in the node's latest chat) and mirrors across every LLM node sharing the same workflow session name.
+- `validation.py`: `_ValidationMixin` holds the per-node run-validation rules (`_node_validation_errors`, `_validation_errors_by_node`, `_validate_nodes`) and `refresh_node_validation_state`, which toggles the red invalid border.
 - `llm_resume.py`: Helpers for resolving the effective resume session ID / serialization key for LLM calls and for draining queued named-session resumptions one at a time.
 - `session_state.py`: `_SessionStateMixin` owns workflow-level named-session storage, node-session snapshot helpers, save/resume option filtering, and named-session reconciliation.
 - `subprocess_execution.py`: `_SubprocessExecutionMixin` owns project-relative path confinement plus file-op, git-action, and script-runner execution.
@@ -14,7 +15,7 @@ The `canvas/` subpackage houses `WorkflowCanvas` and its four behavior mixins. S
 - `variables.py`: `_VariableMixin` owns variable-name extraction, prompt-preview/validation graph analysis, per-lineage variable runtime state, and join-merge helpers.
 
 ## Mixin Pattern
-- `_SubprocessExecutionMixin`, `_ExecutionMixin`, `_SessionStateMixin`, `_VariableMixin`, and `_IOMixin` are not standalone. They rely directly on `WorkflowCanvas` instance state and use `TYPE_CHECKING` imports only for annotations.
+- `_SubprocessExecutionMixin`, `_ExecutionMixin`, `_ValidationMixin`, `_SessionStateMixin`, `_VariableMixin`, and `_IOMixin` are not standalone. They rely directly on `WorkflowCanvas` instance state and use `TYPE_CHECKING` imports only for annotations.
 
 ## Key Invariants
 - All undo-pushable mutations go through `WorkflowCanvas._undo_stack`.
@@ -36,8 +37,9 @@ The `canvas/` subpackage houses `WorkflowCanvas` and its four behavior mixins. S
 - Queued resumable LLM workers are fully signal-wired before they enter the wait queue, so releasing a queue slot only starts the already-connected worker.
 - `stop_all()` and node removal clear queued resumable LLM work so shutdown and deletion do not leave orphaned waiting executions behind.
 - Copy/paste never preserves provider session IDs or named-session bindings. Pasted LLM nodes keep `resume_session_enabled`, but start with cleared `saved_session_id`, `saved_session_provider`, `save_session_enabled`, `save_session_name`, `restart_session_enabled`, and `resume_named_session_name`.
-- Named-session transcripts are mirrored across all LLM nodes whose effective workflow session name matches, so save-owner and resume nodes display the same merged history; user turns carry the sending node title.
-- `_run_workflow` clears an LLM transcript only when `llm_history_kept_on_run` is false, so a resumed CLI session keeps its earlier turns visible and the new call appends to them.
+- Named-session conversations are mirrored across all LLM nodes whose effective workflow session name matches (same conversation ids), so save-owner and resume nodes display the same tabs and merged history; user turns carry the sending node title.
+- One conversation equals one real CLI chat. `begin_llm_conversation` reuses a conversation only when the call resumes a session id that conversation already captured; a call with no resume id, a not-yet-captured id, a session restart, or a non-resumable provider opens a new conversation, which the Output page shows as a new tab. Loop iterations on a non-resuming node therefore produce one tab per iteration.
+- `_run_workflow` clears an LLM node's conversations only when `llm_history_kept_on_run` is false, so a resumed CLI session keeps its earlier turns visible and the new call appends to that same tab.
 - For structured providers, tool and assistant events arrive before the final response is parsed. `finish_llm_turn` adds the parsed final text as an assistant item only when no assistant text streamed for that turn (Grok, plain-text fallbacks), so responses are never duplicated.
 
 ## Save/Load Notes

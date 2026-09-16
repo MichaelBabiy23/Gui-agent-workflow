@@ -1,17 +1,22 @@
 """Shared node-output helpers for WorkflowCanvas execution.
 
 Non-LLM nodes keep a plain-text ``output_text`` log. LLM nodes keep a
-``ChatTranscript`` instead; the helpers here start a user turn when a call
-is fired, fold live ``StreamEvent`` objects into it, and finish the turn
-when the worker completes. Named-session output is mirrored: every LLM
-node that saves to or resumes the same workflow session name receives the
-same transcript operations, so selecting any of them shows one merged
-conversation.
+``ChatConversations`` set instead: one ``ChatTranscript`` per real CLI chat.
+Before a call is fired the canvas picks its conversation
+(``begin_llm_conversation``): a call that resumes a captured session id
+continues the conversation holding that id, every other call opens a new
+one. The helpers here then start the user turn in that conversation, fold
+live ``StreamEvent`` objects into it, and finish the turn when the worker
+completes. Named-session output is mirrored: every LLM node that saves to
+or resumes the same workflow session name receives the same operations on
+the same conversation id, so selecting any of them shows one merged
+history.
 """
 
 from __future__ import annotations
 
 from typing import Callable
+from uuid import uuid4
 
 from src.gui.llm_chat import TURN_COMPLETED, ChatTranscript
 from src.gui.llm_node import LLMNode, WorkflowNode
@@ -78,32 +83,83 @@ def clear_node_output(canvas, node: WorkflowNode) -> None:
 
 
 # ----------------------------------------------------------------------
+# LLM conversation selection
+# ----------------------------------------------------------------------
+
+
+def _llm_targets(canvas, node: LLMNode) -> list[LLMNode]:
+    return [target for target in iter_output_targets(canvas, node) if isinstance(target, LLMNode)]
+
+
+def _resolve_conversation_id(node: LLMNode, conversation_id: str) -> str:
+    """Notes sent without a conversation go to the node's latest chat (or a new one)."""
+    if conversation_id:
+        return conversation_id
+    latest = node.conversations.latest()
+    return latest.conversation_id if latest is not None else str(uuid4())
+
+
+def begin_llm_conversation(canvas, node: LLMNode, resume_session_id: str) -> str:
+    """Pick the conversation the next call belongs to and return its id.
+
+    A call that resumes a captured CLI session continues the conversation
+    that already holds that session id. Any other call (no resume, no id
+    captured yet, session restart, or a provider without resume support)
+    is a brand-new chat with the provider and therefore gets a new
+    conversation, which the Output page shows as its own tab.
+    """
+    resume_session_id = resume_session_id.strip()
+    conversation_id = ""
+    if resume_session_id:
+        existing = node.conversations.find_by_session(resume_session_id)
+        if existing is not None:
+            conversation_id = existing.conversation_id
+    if not conversation_id:
+        conversation_id = str(uuid4())
+    for target in _llm_targets(canvas, node):
+        target.conversations.open(conversation_id, session_id=resume_session_id)
+    return conversation_id
+
+
+def record_llm_session_id(canvas, node: LLMNode, conversation_id: str, session_id: str) -> None:
+    """Tag a conversation with the session id the provider reported for it."""
+    if not conversation_id or not session_id.strip():
+        return
+    for target in _llm_targets(canvas, node):
+        target.conversations.open(conversation_id)
+        target.conversations.set_session_id(conversation_id, session_id)
+
+
+# ----------------------------------------------------------------------
 # LLM transcript operations
 # ----------------------------------------------------------------------
 
 
-def _apply_to_transcripts(canvas, node: LLMNode, operation: Callable[[ChatTranscript], None]) -> None:
-    for target in iter_output_targets(canvas, node):
-        if isinstance(target, LLMNode):
-            operation(target.transcript)
+def _apply_to_transcripts(
+    canvas, node: LLMNode, conversation_id: str, operation: Callable[[ChatTranscript], None]
+) -> None:
+    conversation_id = _resolve_conversation_id(node, conversation_id)
+    for target in _llm_targets(canvas, node):
+        operation(target.conversations.open(conversation_id))
 
 
-def add_llm_note(canvas, node: LLMNode, text: str, level: str = LEVEL_INFO) -> None:
-    _apply_to_transcripts(canvas, node, lambda transcript: transcript.add_diagnostic(text, level))
+def add_llm_note(canvas, node: LLMNode, text: str, level: str = LEVEL_INFO, conversation_id: str = "") -> None:
+    _apply_to_transcripts(canvas, node, conversation_id, lambda transcript: transcript.add_diagnostic(text, level))
 
 
-def start_llm_turn(canvas, node: LLMNode, composed_prompt: str, turn_id: str) -> None:
+def start_llm_turn(canvas, node: LLMNode, composed_prompt: str, turn_id: str, conversation_id: str) -> None:
     """Add the user bubble for the prompt the workflow is about to send."""
     sender = node.title if llm_shared_session_name(node) else ""
     _apply_to_transcripts(
         canvas,
         node,
+        conversation_id,
         lambda transcript: transcript.add_user_turn(composed_prompt, turn_id=turn_id, sender=sender),
     )
 
 
-def apply_llm_stream_event(canvas, node: LLMNode, event: StreamEvent) -> None:
-    _apply_to_transcripts(canvas, node, lambda transcript: transcript.apply_event(event))
+def apply_llm_stream_event(canvas, node: LLMNode, event: StreamEvent, conversation_id: str) -> None:
+    _apply_to_transcripts(canvas, node, conversation_id, lambda transcript: transcript.apply_event(event))
 
 
 def finish_llm_turn(
@@ -113,6 +169,7 @@ def finish_llm_turn(
     status: str = TURN_COMPLETED,
     error: str = "",
     final_text: str = "",
+    conversation_id: str = "",
 ) -> None:
     """Close the turn; add the final response when nothing streamed for it."""
 
@@ -121,13 +178,13 @@ def finish_llm_turn(
             transcript.add_assistant(final_text)
         transcript.finish_turn(turn_id, status, error)
 
-    _apply_to_transcripts(canvas, node, operation)
+    _apply_to_transcripts(canvas, node, conversation_id, operation)
 
 
 def interrupt_all_llm_turns(canvas) -> None:
     for node in canvas._nodes.values():
         if isinstance(node, LLMNode):
-            node.transcript.interrupt_open_turns()
+            node.conversations.interrupt_open_turns()
 
 
 def llm_history_kept_on_run(canvas, node: LLMNode) -> bool:

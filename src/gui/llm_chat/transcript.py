@@ -77,9 +77,12 @@ class ChatItem:
 class ChatTranscript:
     """Ordered chat items plus change notifications for the view."""
 
-    def __init__(self) -> None:
+    def __init__(self, conversation_id: str = "", session_id: str = "") -> None:
         self.items: List[ChatItem] = []
         self._listeners: List[ChangeListener] = []
+        # Identity of the real CLI chat this transcript shows (see conversations.py).
+        self.conversation_id: str = conversation_id
+        self.session_id: str = session_id
 
     # ------------------------------------------------------------------
     # Listeners

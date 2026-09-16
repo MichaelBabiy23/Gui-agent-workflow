@@ -4,8 +4,9 @@ The form is split into two full-height pages behind one header:
 
 - ``Settings``: name, model/effort, profile, session controls, prompt
   templates, prompt editor, and prompt preview (scrollable).
-- ``Output``: the chat transcript of everything the workflow sent to the
-  model and everything the model did and answered (``ChatView``).
+- ``Output``: the node's chats (``ConversationTabs``): one tab per real CLI
+  conversation, each a chat transcript of everything the workflow sent to
+  the model and everything the model did and answered.
 
 The header (session crumb, node title, live pill, Settings/Output toggle)
 stays visible on both pages.
@@ -32,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..checked_dropdown import CheckedDropdown
-from ..llm_chat import VIEW_OUTPUT, VIEW_SETTINGS, ChatHeader, ChatTranscript, ChatView
+from ..llm_chat import VIEW_OUTPUT, VIEW_SETTINGS, ChatConversations, ChatHeader, ConversationTabs
 from ..llm_widget import (
     ModelSelector,
     default_variant_for,
@@ -73,10 +74,10 @@ class _LLMForm(QWidget):
         self._settings_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._pages.addWidget(self._settings_scroll)
 
-        self.chat_view = ChatView()
-        self.chat_view.turn_started.connect(self._on_turn_started)
-        self.chat_view.busy_changed.connect(self.header.set_busy)
-        self._pages.addWidget(self.chat_view)
+        self.chat_tabs = ConversationTabs()
+        self.chat_tabs.turn_started.connect(self._on_turn_started)
+        self.chat_tabs.busy_changed.connect(self.header.set_busy)
+        self._pages.addWidget(self.chat_tabs)
 
         self.set_view(VIEW_SETTINGS)
         self.model_selector.model_changed.connect(self._on_base_model_changed)
@@ -286,21 +287,23 @@ class _LLMForm(QWidget):
         if self.view() != VIEW_OUTPUT:
             self.set_view(VIEW_OUTPUT)
 
-    def bind_transcript(self, transcript: Optional[ChatTranscript], *, title: str, session_label: str, shared: bool) -> None:
+    def bind_conversations(
+        self, conversations: Optional[ChatConversations], *, title: str, session_label: str, shared: bool
+    ) -> None:
         self.header.set_title(title)
         self.header.set_crumb(session_label)
-        self.chat_view.set_transcript(transcript, show_sender=shared)
+        self.chat_tabs.set_conversations(conversations, show_sender=shared)
 
     def set_header_title(self, title: str) -> None:
         self.header.set_title(title)
 
     def set_text_scale(self, scale: float) -> None:
         self.header.set_text_scale(scale)
-        self.chat_view.set_text_scale(scale)
+        self.chat_tabs.set_text_scale(scale)
 
     def chat_widgets(self) -> tuple[QWidget, QWidget]:
         """Widgets whose fonts the panel zoom must leave to ``set_text_scale``."""
-        return self.header, self.chat_view
+        return self.header, self.chat_tabs
 
     # ------------------------------------------------------------------
     # Model / effort
