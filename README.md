@@ -36,10 +36,10 @@ Each node does one job. LLM nodes call Claude, Codex/OpenAI, Grok, or OpenCode m
 
 | Provider | Models |
 |----------|--------|
-| **Claude** | Opus 5 and Sonnet 5 with `low` / `medium` / `high` / `xhigh` / `max` effort (per-model ladder) |
-| **Codex / OpenAI** | GPT-5.6 Sol, Terra, and Luna with efforts through `ultra` (per-model ladder) |
+| **Claude** | Fable 5.1, Opus 5, and Sonnet 5 with `low` / `medium` / `high` / `xhigh` / `max` effort (per-model ladder) |
+| **Codex / OpenAI** | GPT-6 Astra (through `max`) plus GPT-5.6 Sol, Terra, and Luna (Sol/Terra through `ultra`) |
 | **Grok** | Grok 4.6 (`low`–`xhigh`) and Grok 4.5 (`low`–`high`) |
-| **OpenCode** | Free OpenCode Zen models: Ox Alpha Free, MiMo-V2.5 Free, Hy3 Free, Nemotron 3 Ultra/3.5 Lightning Free, Muse Spark 1.2 Contributor Free |
+| **OpenCode** | Free OpenCode Zen models: Big Pickle, MiMo-V2.5 Free, Ling 3.0 Flash Fin Free, Nemotron 3 Ultra/3.5 Lightning Free, Muse Spark 1.3 Contributor Free |
 
 All providers run as CLI subprocesses.
 

@@ -13,6 +13,7 @@ from src.llm.base_provider import BaseLLMProvider
 
 class LLMWorker(QThread):
     output_line = Signal(str)
+    stream_event = Signal(object)
     finished = Signal(str, str)
     error = Signal(str, str)
 
@@ -109,11 +110,8 @@ class LLMWorker(QThread):
                 if not structured_output:
                     self.output_line.emit(stripped)
                     continue
-                for progress_line in self.provider.structured_output_progress_lines(
-                    stripped,
-                    self.model,
-                ):
-                    self.output_line.emit(progress_line)
+                for event in self.provider.structured_output_events(stripped, self.model):
+                    self.stream_event.emit(event)
 
             if self._cancelled:
                 self._terminate_process()

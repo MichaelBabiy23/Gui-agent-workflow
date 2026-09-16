@@ -5,7 +5,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Dict, List, Sequence
 from uuid import uuid4
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QThread, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.workers.git_worker import GitWorker
@@ -19,7 +19,18 @@ from src.gui.control_flow.join_node import JoinNode
 from src.gui.llm_node import LLMNode, StartNode, WorkflowNode
 from src.gui.script_runner.script_node import ALLOWED_SCRIPT_SUFFIXES, ScriptNode
 from src.gui.variables import VariableNode
-from src.gui.canvas.llm_output import append_output_line, clear_node_output, start_llm_output_block
+from src.gui.canvas.llm_output import (
+    add_llm_note,
+    append_output_line,
+    apply_llm_stream_event,
+    clear_node_output,
+    finish_llm_turn,
+    interrupt_all_llm_turns,
+    llm_history_kept_on_run,
+    start_llm_turn,
+)
+from src.gui.llm_chat import TURN_COMPLETED, TURN_FAILED, TURN_INTERRUPTED
+from src.llm.stream_events import EVENT_ASSISTANT_DELTA, LEVEL_ERROR, LEVEL_WARNING, StreamEvent
 from src.gui.canvas.llm_resume import llm_resume_serial_key, llm_resume_session_id, release_serial_llm_resume_slot
 from src.gui.workflow_io import get_provider_for_model
 from src.llm.profiles import resolve_profile_env
@@ -136,6 +147,7 @@ class _ExecutionMixin:
         self._run_workflow(nodes, roots=[start], resume=resume)
 
     def stop_all(self: "WorkflowCanvas"):
+        interrupt_all_llm_turns(self)
         self._running = False
         self.run_state_changed.emit(False)
         self._no_fanout = False
@@ -292,7 +304,6 @@ class _ExecutionMixin:
         if self._running:
             return
         if not resume:
-            self._llm_invocation_counts.clear()
             self._exec_streamed_output.clear()
             self._llm_serial_resume_nodes.clear()
             self._llm_serial_waiting_exec_ids.clear()
@@ -309,6 +320,8 @@ class _ExecutionMixin:
 
         for node in nodes:
             node.set_status("idle")
+            if isinstance(node, LLMNode) and llm_history_kept_on_run(self, node):
+                continue
             clear_node_output(self, node)
         self._running = True
         self.run_state_changed.emit(True)
@@ -350,10 +363,15 @@ class _ExecutionMixin:
 
     def _drop_exec(self: "WorkflowCanvas", exec_id: int) -> None:
         """Remove all per-execution bookkeeping for a finished/aborted exec."""
-        del self._active_workers[exec_id]
+        worker = self._active_workers.pop(exec_id, None)
         self._exec_node.pop(exec_id, None)
         self._exec_lineage.pop(exec_id, None)
         self._current_run_exec_ids.discard(exec_id)
+        # Workers emit their terminal signal from inside QThread.run(), so this
+        # handler can run while the thread is still unwinding. Dropping the last
+        # reference then would destroy a running QThread, which aborts the app.
+        if isinstance(worker, QThread) and worker.isRunning():
+            worker.wait(5000)
 
     def _fire_invocation(self: "WorkflowCanvas", node: GraphNode, exec_id: int,
                          lineage_token: str = "", loop_token: str = "", join_token: str = ""):
@@ -392,13 +410,13 @@ class _ExecutionMixin:
             return
         model_id = node.model_id
         if not model_id:
-            append_output_line(self, node, "[Error] No model selected.")
+            add_llm_note(self, node, "No model selected.", LEVEL_ERROR)
             node.set_status("error")
             self._drop_exec(exec_id)
             return
         provider = get_provider_for_model(model_id)
         if provider is None:
-            append_output_line(self, node, f"[Error] Unknown model: {model_id}")
+            add_llm_note(self, node, f"Unknown model: {model_id}", LEVEL_ERROR)
             node.set_status("error")
             self._drop_exec(exec_id)
             return
@@ -406,14 +424,15 @@ class _ExecutionMixin:
         prompt_text, runtime_warnings = self.render_llm_prompt_text(node, lineage_token=lineage_token)
         composed_prompt = self.compose_llm_prompt(node, prompt_text=prompt_text)
         for warning in runtime_warnings:
-            append_output_line(self, node, f"[Warning] {warning}")
+            add_llm_note(self, node, warning, LEVEL_WARNING)
         if node.restart_session_enabled and node.save_session_enabled:
-            append_output_line(
+            add_llm_note(
                 self,
                 node,
-                "[Session] Restarting at this node and overwriting the saved session ID after this call.",
+                "Restarting the session at this node; the saved session ID is overwritten after this call.",
             )
-        start_llm_output_block(self, node, composed_prompt)
+        turn_id = str(uuid4())
+        start_llm_turn(self, node, composed_prompt, turn_id)
         worker = LLMWorker(
             provider,
             composed_prompt,
@@ -426,11 +445,19 @@ class _ExecutionMixin:
         self._active_workers[exec_id] = worker
         self._exec_streamed_output[exec_id] = False
 
-        def on_output(line: str, _n=node, _e=exec_id, _r=run_id):
-            if _r == self._run_id and self._running and _e in self._active_workers and _e not in self._retired_exec_ids:
-                if not provider.uses_structured_output(model_id):
-                    self._exec_streamed_output[_e] = True
-                append_output_line(self, _n, line)
+        def _is_live(_e=exec_id, _r=run_id) -> bool:
+            return _r == self._run_id and self._running and _e in self._active_workers and _e not in self._retired_exec_ids
+
+        def on_output(line: str, _n=node, _e=exec_id, _t=turn_id):
+            if _is_live():
+                self._exec_streamed_output[_e] = True
+                apply_llm_stream_event(
+                    self, _n, StreamEvent(kind=EVENT_ASSISTANT_DELTA, item_id=f"plain:{_t}", text=line + "\n")
+                )
+
+        def on_event(event: object, _n=node):
+            if _is_live() and isinstance(event, StreamEvent):
+                apply_llm_stream_event(self, _n, event)
 
         def on_finished(
             full: str,
@@ -441,12 +468,14 @@ class _ExecutionMixin:
             _lt=lineage_token,
             _lp=loop_token,
             _jt=join_token,
+            _t=turn_id,
         ):
             self._on_invocation_done(
                 _n,
                 _e,
                 full,
                 error=False,
+                turn_id=_t,
                 captured_session_id=session_id,
                 run_id=_r,
                 lineage_token=_lt,
@@ -463,12 +492,14 @@ class _ExecutionMixin:
             _lt=lineage_token,
             _lp=loop_token,
             _jt=join_token,
+            _t=turn_id,
         ):
             self._on_invocation_done(
                 _n,
                 _e,
                 msg,
                 error=True,
+                turn_id=_t,
                 captured_session_id=session_id,
                 run_id=_r,
                 lineage_token=_lt,
@@ -477,6 +508,7 @@ class _ExecutionMixin:
             )
 
         worker.output_line.connect(on_output)
+        worker.stream_event.connect(on_event)
         worker.finished.connect(on_finished)
         worker.error.connect(on_error)
         serial_key = ""
@@ -488,7 +520,7 @@ class _ExecutionMixin:
             self._llm_serial_wait_queues.setdefault(serial_key, []).append(
                 (serial_key, exec_id, worker, run_id, lineage_token, loop_token, join_token)
             )
-            append_output_line(self, node, "Waiting for previous resumed session call to finish.")
+            add_llm_note(self, node, "Waiting for the previous call on this session to finish.")
             return
         if should_serialize:
             self._llm_serial_resume_nodes.add(serial_key)
@@ -686,10 +718,7 @@ class _ExecutionMixin:
         retired = exec_id in self._retired_exec_ids
         self._retired_exec_ids.discard(exec_id)
         self._drop_exec(exec_id)
-        if run_id != self._run_id or not self._running:
-            self._check_drain()
-            return
-        if retired:
+        if run_id != self._run_id or not self._running or retired:
             self._check_drain()
             return
         node.set_status("done")
@@ -913,8 +942,11 @@ class _ExecutionMixin:
     def _on_invocation_done(self: "WorkflowCanvas", node: GraphNode, exec_id: int,
                             result: str, error: bool, captured_session_id: str = "",
                             run_id: int = 0,
-                            lineage_token: str = "", loop_token: str = "", join_token: str = ""):
+                            lineage_token: str = "", loop_token: str = "", join_token: str = "",
+                            turn_id: str = ""):
         if exec_id not in self._active_workers:
+            if isinstance(node, LLMNode) and turn_id:
+                finish_llm_turn(self, node, turn_id, TURN_INTERRUPTED)
             return
         streamed_output = self._exec_streamed_output.pop(exec_id, False)
         retired = exec_id in self._retired_exec_ids
@@ -942,16 +974,20 @@ class _ExecutionMixin:
             release_serial_llm_resume_slot(self, serial_key)
             if session_catalog_changed:
                 self.selection_changed.emit()
-        if run_id != self._run_id or not self._running:
-            self._check_drain()
-            return
-        if retired:
+        if run_id != self._run_id or not self._running or retired:
+            if isinstance(node, LLMNode) and turn_id:
+                finish_llm_turn(self, node, turn_id, TURN_INTERRUPTED)
             self._check_drain()
             return
 
         if error:
-            msg = f"[Error] {result}"
-            append_output_line(self, node, msg)
+            if isinstance(node, LLMNode):
+                cancelled = result.strip() == "Cancelled"
+                finish_llm_turn(
+                    self, node, turn_id, TURN_INTERRUPTED if cancelled else TURN_FAILED, error="" if cancelled else result
+                )
+            else:
+                append_output_line(self, node, f"[Error] {result}")
             node.set_status("error")
             if is_usage_limit_error(result):
                 self.stop_all()
@@ -975,9 +1011,7 @@ class _ExecutionMixin:
                 if result:
                     append_output_line(self, node, result)
             elif isinstance(node, LLMNode):
-                if not streamed_output and result.strip():
-                    for line in result.splitlines():
-                        append_output_line(self, node, line)
+                finish_llm_turn(self, node, turn_id, TURN_COMPLETED, final_text="" if streamed_output else result)
             else:
                 node.output_text = result
             node.set_status("done")

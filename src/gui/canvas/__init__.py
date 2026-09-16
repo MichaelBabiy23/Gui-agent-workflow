@@ -47,7 +47,7 @@ from src.gui.variables import VariableNode
 
 GraphNode = WorkflowNode
 SourceNode = Union[StartNode, WorkflowNode]
-PREFERRED_DEFAULT_LLM_MODEL_ID = "x-preview-f-free"
+PREFERRED_DEFAULT_LLM_MODEL_ID = "big-pickle"
 
 
 class _CancelableWorker(Protocol):
@@ -107,7 +107,6 @@ class WorkflowCanvas(
         self._retired_exec_ids: set = set()
         self._current_run_exec_ids: set = set()
         self._exec_streamed_output: Dict[int, bool] = {}
-        self._llm_invocation_counts: Dict[str, int] = {}
         self._llm_serial_resume_nodes: set[str] = set()
         self._llm_serial_waiting_exec_ids: set[int] = set()
         self._llm_serial_wait_queues: Dict[str, List[tuple]] = {}

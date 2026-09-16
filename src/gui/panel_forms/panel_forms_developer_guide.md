@@ -4,13 +4,13 @@
 Holds the per-node form widget classes that `PropertiesPanel` stacks and shows for the selected workflow node. Split into modules so no single file approaches the size cap.
 
 ## Files
-- `llm_form.py`: `_LLMForm` — the LLM-call editor. Owns the two-stage model selection (Model dropdown plus a dependent Effort dropdown that only appears for models with variants), the account-profile dropdown, the session controls (resume/save/restart/named-resume), per-node prompt-template `Prepend`/`Append` dropdowns, the Prompt/Prompt-Preview tabs, the variable-warning note, and the per-call `Call N` output tabs.
+- `llm_form.py`: `_LLMForm` — the LLM-call editor. A shared `ChatHeader` (session crumb, node title, live pill, Settings/Output toggle) sits above a two-page stack. The Settings page (its own scroll area) owns the two-stage model selection (Model dropdown plus a dependent Effort dropdown that only appears for models with variants), the account-profile dropdown, the session controls (resume/save/restart/named-resume), per-node prompt-template `Prepend`/`Append` dropdowns, the Prompt editor, the Prompt Preview, and the variable-warning note. The Output page is a `ChatView` from `src/gui/llm_chat/` bound to the node transcript.
 - `node_forms.py`: The remaining node forms — `_FileOpForm`, `_ConditionalForm`, `_LoopForm`, `_JoinForm`, `_GitActionForm`, `_AttentionForm`, and `_ScriptForm`.
 - `__init__.py`: Re-exports every form class so importers use `from .panel_forms import _LLMForm, ...`.
 
 ## Conventions
 - Each form is a plain `QWidget` with public widget attributes (e.g. `title_edit`, `model_selector`) that `PropertiesPanel` wires to signals and reads/writes directly.
-- Forms expose `show_output(visible)` and small `set_*`/`current_*` state methods rather than reaching into child widgets from outside.
+- Non-LLM forms expose `show_output(visible)` and small `set_*`/`current_*` state methods rather than reaching into child widgets from outside. `_LLMForm` exposes `bind_transcript(transcript, title=, session_label=, shared=)`, `set_view`/`view` (`settings`/`output`), `set_header_title`, `set_text_scale`, and `chat_widgets()` (the widgets the panel zoom must leave alone).
 - `_LLMForm.set_profile_state(visible, options, selected_name)` populates the profile dropdown; `current_profile_name()` reads the selected value (empty string = default account). The widget is hidden for providers without profile support.
 - Model/effort state flows through composed ids (`<model>:<variant>`): `set_model_state(full_id)` loads a stored id into both selectors without emitting, `current_full_model_id()` returns the current composition, and the `model_selection_changed(str)` signal fires only for user-driven changes. Variant options come from the provider catalog via `variant_options_for`/`default_variant_for` in `llm_widget.py`.
 

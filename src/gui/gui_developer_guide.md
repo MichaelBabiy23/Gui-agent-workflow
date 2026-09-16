@@ -6,18 +6,19 @@ Implements the interactive Qt UI for composing and running LLM workflows.
 ## Contents
 - `main_window.py`: Main shell with File/Prompt menus, toolbar, and status bar. Hosts `WorkflowCanvas` and `PropertiesPanel` in a horizontal `QSplitter`, restores and saves panel width and panel text zoom with `QSettings`, keeps the side panel permanently visible, drives node-vs-overview mode from `canvas.selection_changed`, applies prompt injections before each run, and handles save/load/clear/project-folder flows. It also handles usage-limit dialogs and the run-time prompt that appears when a loaded workflow already contains saved LLM sessions.
 - `llm_sessions/`: Helper package for workflow-overview rendering, LLM form session-widget loading, and workflow-level named-session rules. See `llm_sessions/llm_sessions_developer_guide.md` for its local developer guide.
+- `llm_chat/`: Chat transcript model plus the native Qt reproduction of the Skylyx code-tab chat used as the LLM node Output page (header, user bubbles, activity rows, markdown assistant text). See `llm_chat/llm_chat_developer_guide.md`.
 - `dialogs/`: Modal dialog classes for runtime user notifications and prompt-injection setup.
 - `canvas/` subpackage: Houses `WorkflowCanvas` plus execution, IO, subprocess, and named-session state mixins.
 - `control_flow/`: Coordination-oriented nodes such as `JoinNode`.
-- `llm_node.py`: Shared graphics-item base plus `LLMNode` and `StartNode`. `WorkflowNode` carries `is_invalid`; invalid nodes render a red border while not actively running or looping. `LLMNode` displays the chosen model's provider logo in its header.
+- `llm_node.py`: Shared graphics-item base plus `LLMNode` and `StartNode`. `WorkflowNode` carries `is_invalid`; invalid nodes render a red border while not actively running or looping. `LLMNode` displays the chosen model's provider logo in its header and owns a `transcript: ChatTranscript` that `clear_output()` resets.
 - `checked_dropdown.py`: Reusable checked popup dropdown used by per-node prompt-template selection controls.
 - `llm_widget.py`: `ModelSelector`, model list widget, provider icon helpers, catalog variant lookup helpers (`variant_options_for`, `default_variant_for`), and `populate_model_selector` (one row per catalog model, without variants).
 - `variables/`: Variable-node package with the graphics item, validation helpers, and variable form widget.
 - `file_op_node.py`: `FileOpNode` plus convenience factories and `AttentionNode`.
 - `git_action_node.py`: Compact node for git operations with action/message settings.
-- `panel_forms/`: Form widget classes used by `PropertiesPanel`, split into `llm_form.py` (the LLM-call form) and `node_forms.py` (file-op, conditional, loop, join, git-action, attention, and script forms).
-- `properties_panel.py`: Resizable side panel with `_OverviewForm`, per-node forms, and the LLM Prompt/Output tabs. The stacked panel switches among overview, LLM, file-op, conditional, loop, join, git-action, attention, script, and variable forms. The LLM form owns the model selector, the session controls, prompt preview, variable-warning note, and per-call output tabs.
-- `properties_panel_node_helpers.py`: Non-LLM node form loaders plus output-routing helpers for the side panel.
+- `panel_forms/`: Form widget classes used by `PropertiesPanel`, split into `llm_form.py` (the LLM-call form with its Settings/Output pages) and `node_forms.py` (file-op, conditional, loop, join, git-action, attention, and script forms).
+- `properties_panel.py`: Resizable side panel with `_OverviewForm` and per-node forms. The stacked panel switches among overview, LLM, file-op, conditional, loop, join, git-action, attention, script, and variable forms. Every form except the LLM form is wrapped in a scroll area; the LLM form fills the panel itself because its Output page is a full-height chat. Ctrl+wheel zoom resizes form fonts and maps onto the chat's text scale (1.0 at the default zoom).
+- `properties_panel_node_helpers.py`: Non-LLM node form loaders plus output-routing helpers for the side panel. LLM output does not pass through here; the chat view subscribes to the node transcript directly.
 - `workflow_io.py`: Pure serialization and validation helpers.
 - `conditional_node.py`: `ConditionalNode` and condition registry metadata.
 - `loop_node.py`: `LoopNode` with loop/done output ports.
@@ -42,7 +43,7 @@ Implements the interactive Qt UI for composing and running LLM workflows.
 - Options come from `src.llm.profiles.discover_profiles`. The first entry is always `Default account` (empty value) which runs the CLI with no environment override. The default config dir (`~/.codex`, `~/.claude`) is labeled `<name> (default)`.
 - The selection is stored on the node as `profile_name` and resolved to an env overlay at run time in `execution.py`. A saved profile name that no longer exists on disk falls back to the default selection.
 - Switching a node's model to a different provider refreshes the dropdown; because Claude and Codex profile names are disjoint, a stale selection resets to the default.
-- Claude's catalog entries are Opus 5 and Sonnet 5; each entry declares reasoning-effort variants, and the form's Effort dropdown writes the chosen variant into the saved `<model>:<effort>` id suffix that the provider maps to Claude Code's `--effort` flag at run time.
+- Claude's catalog entries are Fable 5.1, Opus 5, and Sonnet 5; each entry declares reasoning-effort variants, and the form's Effort dropdown writes the chosen variant into the saved `<model>:<effort>` id suffix that the provider maps to Claude Code's `--effort` flag at run time.
 
 ## LLM Session UI Rules
 - Claude, Codex/OpenAI, Grok, and OpenCode models show three base controls: `Resume previous session`, `Save session ID`, and `Resume session ID`.
@@ -66,10 +67,11 @@ Implements the interactive Qt UI for composing and running LLM workflows.
 - Mouse-wheel zoom is active on canvas except while the model dropdown is open.
 - Selected connections expose bend handles. Double-click a segment to add a vertex, drag a handle to move it, and Shift+click a handle to remove it.
 - Manual connection vertices are persisted in workflow JSON as `connections[].vertices` and participate in undo/redo, paste, and load flows.
-- LLM output logs include per-invocation separators (`=== Call N ===`), and the LLM output pane renders those separators as separate nested `Call N` tabs.
-- Workflow-named LLM sessions share one in-memory output history across the save-owner and every resume node using that same session name; each call block includes the producing node title, the session label, the full composed prompt, and then the response content.
+- The LLM Output page is a chat transcript: one user bubble per call (the full composed prompt), live tool-activity rows while the CLI works, assistant markdown replies, and diagnostics. A call on the selected node switches the form to Output automatically; the Settings/Output choice otherwise persists while switching nodes.
+- Workflow-named LLM sessions share one in-memory transcript history across the save-owner and every resume node using that same session name; user bubbles in shared transcripts show the sending node's title above them.
+- LLM transcripts are cleared at run start unless the node resumes an existing session, in which case the new call continues the conversation as another turn.
 - Each `LLMNode` has checked `Prepend` and `Append` dropdowns listing every saved prompt template. Saved global default templates appear selected in both dropdowns by default; the node stores only local additions and per-side opt-outs from that default set, while prompt preview can still reflect transient next-run injection state.
 - `VariableNode` stores `variable_name`, `variable_type`, and `variable_value`. Later variable nodes with the same name overwrite the earlier value on downstream branches, and the variable form shows a yellow non-blocking warning when the selected node overwrites an upstream definition.
 - Ctrl+mouse-wheel inside properties panel changes panel text size.
-- Properties panel output areas stream execution output for the currently selected node.
+- Properties panel output areas stream execution output for the currently selected node; for LLM nodes the stream is folded into the chat transcript on the GUI thread.
 - Copy/paste generates a new node identity and never carries over a saved CLI session ID or named-session binding to the pasted node.

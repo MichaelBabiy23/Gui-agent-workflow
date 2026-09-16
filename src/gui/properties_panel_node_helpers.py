@@ -6,17 +6,18 @@ from src.gui.conditional_node import ConditionalNode
 from src.gui.control_flow.join_node import JoinNode
 from src.gui.file_op_node import AttentionNode, FileOpNode
 from src.gui.git_action_node import GitActionNode
-from src.gui.llm_node import LLMNode
 from src.gui.loop_node import LoopNode
 from src.gui.script_runner import ScriptNode
 from src.gui.variables import VariableNode
 
 
 def append_node_output(panel, node, line: str) -> None:
-    if isinstance(node, LLMNode):
-        panel._llm_form.show_output(True)
-        panel._llm_form.append_output_line(line)
-    elif isinstance(node, ConditionalNode):
+    """Append one line to the visible non-LLM output box.
+
+    LLM nodes are not routed here: their chat view listens to the node's
+    ``ChatTranscript`` directly.
+    """
+    if isinstance(node, ConditionalNode):
         panel._cond_form.show_output(True)
         panel._cond_form.output_edit.appendPlainText(line)
     elif isinstance(node, AttentionNode):
@@ -43,10 +44,7 @@ def append_node_output(panel, node, line: str) -> None:
 
 
 def clear_node_output(panel, node) -> None:
-    if isinstance(node, LLMNode):
-        panel._llm_form.clear_output()
-        panel._llm_form.show_output(False)
-    elif isinstance(node, ConditionalNode):
+    if isinstance(node, ConditionalNode):
         panel._cond_form.output_edit.clear()
         panel._cond_form.show_output(False)
     elif isinstance(node, AttentionNode):

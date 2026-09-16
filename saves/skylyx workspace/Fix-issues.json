@@ -1,0 +1,55 @@
+{
+  "nodes": [
+    {
+      "node_type": "loop",
+      "id": "78d01f66-6194-4bff-873d-660c96166fcd",
+      "label_index": 1,
+      "x": -58.40925579687513,
+      "y": 48.407893421874974,
+      "name": "Loop 1",
+      "loop_count": 1
+    },
+    {
+      "id": "72e0d957-c0b9-4674-8d0c-269482845673",
+      "label_index": 2,
+      "x": 575.3541356406245,
+      "y": -118.0098124375,
+      "name": "LLM 2",
+      "model": "claude-opus-5:medium",
+      "prompt": "take one issue from github and take ownership of that issue meaning asign it to me and solve it fully up to the PR stage. i only want you to assign an issue that you understand fully and are convinced you can complete from start to finish, you are part of an automated workflow so i will not be able to answer questions and will look at the PR later. do not assign issues you don't fully understand or need clarification or you cannot complete up to the PR stage. if you started an issue but did not succeed in solving it fully and reaching the PR stage then discard all work and unassign me from the issue.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "25d94d1e-96b9-408f-81cc-85ac48196a83",
+      "saved_session_provider": "claude",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    }
+  ],
+  "connections": [
+    {
+      "from": "78d01f66-6194-4bff-873d-660c96166fcd",
+      "to": "72e0d957-c0b9-4674-8d0c-269482845673",
+      "source_port": "loop"
+    },
+    {
+      "from": "72e0d957-c0b9-4674-8d0c-269482845673",
+      "to": "78d01f66-6194-4bff-873d-660c96166fcd"
+    },
+    {
+      "from": "start",
+      "to": "78d01f66-6194-4bff-873d-660c96166fcd"
+    }
+  ],
+  "node_counter": 2,
+  "start_pos": [
+    -483.64565624999994,
+    -45.24701875
+  ],
+  "named_sessions": []
+}

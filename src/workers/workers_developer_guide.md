@@ -10,11 +10,12 @@ Hosts threaded execution logic so long-running subprocess calls do not block the
 
 ## Key Behavior
 - `LLMWorker` receives a `BaseLLMProvider`, prompt text, model id, optional session id, optional working directory, optional `env_overlay`, and timeout. It runs the provider command, writes prompt text to stdin only when the provider says it uses stdin, merges stdout and stderr, and emits lines through `output_line` for plain-text providers. When `env_overlay` is non-empty it is merged onto a copy of `os.environ` for the subprocess; this is how account-profile selection (e.g. `CODEX_HOME`, `CLAUDE_CONFIG_DIR`) reaches the CLI.
-- For structured-output providers, `LLMWorker` still accumulates every raw line for final parsing, but it may also emit provider-formatted progress lines through `output_line` while the subprocess is running so the GUI does not appear frozen during long Codex calls.
+- For structured-output providers, `LLMWorker` accumulates every raw line for final parsing and emits each line's `StreamEvent`s (from the provider's `structured_output_events`) through `stream_event` while the subprocess is running, so tool calls and intermediate replies appear in the chat transcript live.
 - `GitWorker` receives a concrete git command, optional working directory, and timeout; validates cwd exists before launch; merges stdout and stderr and emits lines through `output_line`.
 - `ScriptWorker` receives a fully built script command, optional working directory, timeout, and optional `stdin_text`; validates cwd exists before launch; writes `stdin_text` once after spawn when provided; then merges stdout and stderr and emits lines through `output_line`.
 - `LLMWorker.finished` and `LLMWorker.error` both emit `(output_text, session_id)`.
-- For structured-output providers (Claude, Codex, Grok, OpenCode), the worker does not stream raw JSON lines to the node output. It parses structured output, extracts the final assistant text, captures the session id for workflow persistence, and may emit provider-specific human-readable progress lines during execution. Grok produces no live events in `json` mode; its result arrives as one final parse.
+- For structured-output providers (Claude, Codex, Grok, OpenCode), the worker does not stream raw JSON lines to the node output. It parses structured output, extracts the final assistant text, captures the session id for workflow persistence, and emits provider-mapped `StreamEvent`s during execution. Grok produces no live events in `json` mode; its result arrives as one final parse.
+- Workers emit `finished`/`error` from inside `run()`. Receivers must keep a reference until the thread has exited (the canvas waits on the thread in `_drop_exec`); destroying a running `QThread` aborts the process.
 - For non-structured providers, if any exist, the worker streams plain text line by line. All current built-in providers are structured-output providers.
 
 ## Cancellation Contract

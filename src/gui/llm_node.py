@@ -18,6 +18,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QGraphicsItem
 
 from src.llm.base_provider import normalize_model_id
+from .llm_chat.transcript import ChatTranscript
 from .llm_widget import (
     NODE_WIDTH,
     ICON_SIZE,
@@ -304,6 +305,7 @@ class LLMNode(WorkflowNode):
         self.append_template_ids: tuple[str, ...] = ()
         self.prepend_disabled_global_template_ids: tuple[str, ...] = ()
         self.append_disabled_global_template_ids: tuple[str, ...] = ()
+        self.transcript: ChatTranscript = ChatTranscript()
         self._height = _COMPACT_NODE_HEIGHT
 
     # ------------------------------------------------------------------
@@ -350,6 +352,7 @@ class LLMNode(WorkflowNode):
 
     def clear_output(self) -> None:
         self.output_text = ""
+        self.transcript.clear()
 
     # ------------------------------------------------------------------
     # Port positions

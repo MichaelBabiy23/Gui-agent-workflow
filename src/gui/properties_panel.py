@@ -252,7 +252,7 @@ class PropertiesPanel(QWidget):
         self._stack.addWidget(self._wrap_form(self._overview_form))
 
         self._llm_form = _LLMForm()
-        self._stack.addWidget(self._wrap_form(self._llm_form))
+        self._stack.addWidget(self._llm_form)  # owns its own Settings scroll + Output chat
 
         self._file_form = _FileOpForm()
         self._stack.addWidget(self._wrap_form(self._file_form))
@@ -415,12 +415,21 @@ class PropertiesPanel(QWidget):
         font.setBold(bold)
         widget.setFont(font)
 
+    def _chat_scale(self) -> float:
+        return max(0.5, 1.0 + (self._text_zoom - DEFAULT_TEXT_ZOOM) * 0.1)
+
+    def _is_chat_widget(self, widget: QWidget) -> bool:
+        return any(owner is widget or owner.isAncestorOf(widget) for owner in self._llm_form.chat_widgets())
+
     def _apply_text_zoom(self) -> None:
         label_size = 12 + self._text_zoom
         field_size = 14 + self._text_zoom
         mono_size = 13 + self._text_zoom
         section_size = 11 + self._text_zoom
+        self._llm_form.set_text_scale(self._chat_scale())
         for label in self.findChildren(QLabel):
+            if self._is_chat_widget(label):
+                continue
             self._set_font_size(
                 label,
                 section_size if label.objectName() == "section_label" else label_size,
@@ -433,15 +442,19 @@ class PropertiesPanel(QWidget):
         for spin in self.findChildren(QSpinBox):
             self._set_font_size(spin, field_size)
         for button in self.findChildren(QPushButton):
+            if self._is_chat_widget(button):
+                continue
             self._set_font_size(button, field_size)
         for editor in self.findChildren(QPlainTextEdit):
-            size = mono_size + 2 if editor.objectName() == "llm_call_output_edit" else mono_size
-            self._set_font_size(editor, size)
+            if self._is_chat_widget(editor):
+                continue
+            self._set_font_size(editor, mono_size)
 
     def _on_llm_title_committed(self):
         if self._current_node is None:
             return
         new_title = self._llm_form.title_edit.text()
+        self._llm_form.set_header_title(new_title)
         if new_title != self._old_title:
             self.title_committed.emit(self._current_node.node_id, self._old_title, new_title)
             self._old_title = new_title

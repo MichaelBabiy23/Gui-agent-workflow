@@ -9,15 +9,16 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 - `codex_provider.py`: Codex catalog, reasoning-effort suffix parsing, command builder, and Codex-specific structured-output parsing.
 - `grok_provider.py`: Grok Build CLI catalog, command builder, and JSON result parsing.
 - `opencode_provider.py`: OpenCode CLI catalog (free OpenCode Zen models), command builder, and JSON-event output parsing.
+- `stream_events.py`: `StreamEvent`, the provider-neutral live event (`session`, `assistant`, `assistant_delta`, `tool`, `diagnostic`) plus helpers for plain-line diagnostics and tool-output stringification. The GUI chat transcript consumes these without knowing provider schemas.
 - `profiles.py`: Discovers per-provider account profiles by scanning the user's home directory and maps a profile to the environment overlay that selects it.
 - `prompt_injection.py`: Prompt template models, persistent JSON storage, run-option normalization, per-node effective-selection helpers, and prompt assembly helpers that place enabled template content plus optional one-off context on either side of the base prompt.
 - `__init__.py`: Explicitly re-exports all provider modules so they self-register at startup. Registry order (and dropdown order): claude, codex, grok, opencode.
 
 ## Current Model Sets
-- Claude: Opus 5 (`claude-opus-5`, efforts low/medium/high/xhigh/max, default high) and Sonnet 5 (`claude-sonnet-5`, efforts low/medium/high/xhigh, default medium). Efforts map onto the CLI `--effort` flag.
-- Codex CLI / OpenAI: GPT-5.6 family — Sol (`gpt-5.6-sol`, default low, efforts through ultra), Terra (`gpt-5.6-terra`, default medium, efforts through ultra), and Luna (`gpt-5.6-luna`, default medium, efforts through max). Efforts map onto `-c model_reasoning_effort=<v>`.
+- Claude: Fable 5.1 (`claude-fable-5-1`, efforts low/medium/high/xhigh/max, default high), Opus 5 (`claude-opus-5`, same ladder, default high), and Sonnet 5 (`claude-sonnet-5`, same ladder, default medium). Efforts map onto the CLI `--effort` flag. Fable 5.1 always enables thinking; Opus/Sonnet enable it for `xhigh` and `max`.
+- Codex CLI / OpenAI: GPT-6 Astra (`gpt-6-astra`, default medium, efforts through max) plus the GPT-5.6 family — Sol (`gpt-5.6-sol`, default low, efforts through ultra), Terra (`gpt-5.6-terra`, default medium, efforts through ultra), and Luna (`gpt-5.6-luna`, default medium, efforts through max). Efforts map onto `-c model_reasoning_effort=<v>`.
 - Grok Build / xAI: Grok 4.6 with low/medium/high/xhigh efforts and Grok 4.5 with low/medium/high efforts, mapped onto `--effort`. Run `grok models` to check availability.
-- OpenCode: free OpenCode Zen models only (`opencode/...` provider namespace): `x-preview-f-free` (Ox Alpha Free), `mimo-v2.5-free`, `hy3-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`, and `muse-spark-1.2-contributor-free` (no variants). Catalog ids are stored bare; `build_command` prefixes them with `opencode/`.
+- OpenCode: free OpenCode Zen models only (`opencode/...` provider namespace): `big-pickle`, `mimo-v2.5-free`, `ling-3.0-flash-fin-free`, `nemotron-3-ultra-free`, `nemotron-3.5-lightning-free`, and `muse-spark-1.3-contributor-free` (no variants). Catalog ids are stored bare; `build_command` prefixes them with `opencode/`.
 
 ## Model Catalog And Variants
 - Providers implement `get_model_entries()` returning `ModelEntry(model_id, label, variants, default_variant_id)`.
@@ -34,13 +35,13 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 - `supports_session_resume(model)` declares whether a model can reuse a prior CLI session.
 - `supports_profiles()` declares whether the provider exposes selectable account profiles (config-home directories). Claude and Codex return `True`; Grok and OpenCode return `False`.
 - `uses_structured_output(model)` declares whether the worker should parse structured CLI output instead of streaming plain text directly.
-- `structured_output_progress_lines(line, model)` optionally maps one structured event line into zero or more human-readable progress lines for the node output while the subprocess is still running.
+- `structured_output_events(line, model)` maps one raw stdout line onto zero or more `StreamEvent`s while the subprocess is still running: session announcements, assistant text (upserted by item id), tool calls with running/completed/failed status plus command/path/input/output/exit code, and diagnostics for non-JSON lines. The default returns nothing.
 - `parse_structured_output(lines)` must be provider-specific whenever JSON schemas differ. The base implementation only joins raw structured lines and extracts the resumable conversation identifier (`session_id` or `thread_id`); it is not responsible for guessing the final assistant message.
 
 ## Session Resume Rules
 - Claude, Codex, Grok, and OpenCode are the resumable providers.
 - Saved session IDs are persisted by the GUI on each LLM node, not in a separate sidecar file.
-- Claude resumes with `--resume <session_id>`.
+- Claude runs `claude --dangerously-skip-permissions --output-format stream-json --verbose -p` (prompt on stdin) and resumes with `--resume <session_id>`. Stream events: `system/init` carries the session id, each `assistant` message's `text` parts become assistant items keyed `<message id>:<index>` and `tool_use` parts become running tool rows, `user` messages' `tool_result` parts complete or fail those rows by `tool_use_id`, and the final `result` line is left to the worker's finished/error path.
 - Codex JSON output emits `thread.started` with `thread_id`; the GUI stores that thread id in the node's saved-session slot and resumes with `codex exec ... resume <thread_id> <prompt>`.
 - Codex uses `-C <dir>` for working-directory scoping.
 - Grok resumes with `--resume <session_id>`; session ids come from the JSON result object's `sessionId`. It always runs with `--always-approve --no-alt-screen --no-auto-update --output-format json` and scopes with `--cwd <dir>`.
@@ -50,15 +51,17 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 - Claude parsing should prefer the provider's explicit result or message fields and only fall back to flattened content blocks when those are absent. If multiple explicit result/message payloads arrive, the parser returns the last non-empty candidate.
 - Codex parsing should handle both legacy top-level terminal message fields and current `item.completed` events whose nested `item` carries `type=agent_message` plus the final text payload.
 - Grok output is one pretty-printed JSON object (`text`, `stopReason`, `sessionId`, usage fields); the parser scans the whole blob with `raw_decode` so interleaved non-JSON noise cannot break it and takes the last object carrying a `text` string.
-- OpenCode parsing joins every `text` event's `part.text` in arrival order into the final response and takes the session id from top-level `sessionID`. Live progress maps only `tool_use` events (started/finished/failed) plus non-JSON CLI notices; `step_start`, `text`, and `step_finish` events stay silent. ANSI color codes are stripped from non-JSON lines.
-- Codex live progress should stay concise and human-readable. Surface useful thread/tool/status milestones in the node output, but do not dump raw JSON lines into the GUI.
+- OpenCode parsing joins every `text` event's `part.text` in arrival order into the final response and takes the session id from top-level `sessionID`. When no text parts arrive, error events are rendered as the response text (e.g. `UnknownError: Unexpected server error...`) instead of raw JSON. Live progress maps only `tool_use` events plus non-JSON CLI notices; `step_start`, `text`, and `step_finish` events stay silent. ANSI color codes are stripped from non-JSON lines.
+- Codex live events: `thread.started` announces the session; `item.started`/`item.completed` map `command_execution` (command, aggregated output, exit code), `file_change` (changed paths), `mcp_tool_call`, `web_search`, and `todo_list` onto tool rows, `agent_message` onto assistant items, and `reasoning` is dropped; `error`/`turn.failed` become error diagnostics. OpenCode live events: `text` parts become assistant items, `tool_use` parts become tool rows (bash command, file path, input, output, exit metadata), `error` becomes a diagnostic; `step_start`/`step_finish` stay silent. Grok emits no live events. Never dump raw JSON lines into the GUI.
 - If a provider's event schema changes, update only that provider's parser. Do not push schema guesses back into `BaseLLMProvider`.
 
 ## Model ID Normalization
 - `normalize_model_id()` in `base_provider.py` maps saved legacy model IDs onto the currently registered catalog before provider lookup or UI selection. Aliases preserve the effort token where the target supports it.
 - Older Opus ids map onto `claude-opus-5:<same-effort>` (bare old Opus ids become `claude-opus-5:high`).
-- Older Sonnet ids map onto `claude-sonnet-5:<same-effort>` except the retired `max` effort, which maps to `claude-sonnet-5:xhigh`; bare old Sonnet and Haiku ids become `claude-sonnet-5:medium`.
+- Older Sonnet ids map onto `claude-sonnet-5:<same-effort>` including `max`; bare old Sonnet and Haiku ids become `claude-sonnet-5:medium`.
+- Older Fable 5 ids map onto `claude-fable-5-1:<same-effort>` (bare becomes `claude-fable-5-1:high`).
 - Retired Codex ids map onto the GPT-5.6 family: `gpt-5.4*` and `gpt-5.5*` onto Terra (preserving effort; bare becomes medium) and `gpt-5.3-codex*` onto Sol (bare becomes low).
+- Retired OpenCode free ids map onto the current free set: `x-preview-f-free` and `hy3-free` onto `big-pickle`, and `muse-spark-1.2-contributor-free` onto `muse-spark-1.3-contributor-free`.
 
 ## Prompt Injection
 - Prompt template state is persisted in repo-root `.prompt_injections.json` and loaded through `PromptInjectionStore`.

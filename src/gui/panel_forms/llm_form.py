@@ -1,6 +1,16 @@
-"""The LLM-call form widget used inside PropertiesPanel."""
+"""The LLM-call form widget used inside PropertiesPanel.
 
-import re
+The form is split into two full-height pages behind one header:
+
+- ``Settings``: name, model/effort, profile, session controls, prompt
+  templates, prompt editor, and prompt preview (scrollable).
+- ``Output``: the chat transcript of everything the workflow sent to the
+  model and everything the model did and answered (``ChatView``).
+
+The header (session crumb, node title, live pill, Settings/Output toggle)
+stays visible on both pages.
+"""
+
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
@@ -11,14 +21,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPlainTextEdit,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
-    QTabWidget,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from ..checked_dropdown import CheckedDropdown
+from ..llm_chat import VIEW_OUTPUT, VIEW_SETTINGS, ChatHeader, ChatTranscript, ChatView
 from ..llm_widget import ModelSelector, default_variant_for, populate_model_selector, variant_options_for
 from src.llm.base_provider import compose_model_variant, normalize_model_id, split_model_variant
 
@@ -26,15 +38,47 @@ from src.llm.base_provider import compose_model_variant, normalize_model_id, spl
 class _LLMForm(QWidget):
     """Form widget for editing an LLMNode's properties."""
 
-    _CALL_HEADER_RE = re.compile(r"^=== Call (\d+) ===$")
-    _CALL_OUTPUT_FONT_BUMP = 1
-
     model_selection_changed = Signal(str)
+    view_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self.header = ChatHeader()
+        self.header.view_changed.connect(self._on_view_toggled)
+        outer.addWidget(self.header)
+
+        self._pages = QStackedWidget()
+        outer.addWidget(self._pages, stretch=1)
+
+        settings = QWidget()
+        settings.setObjectName("llm_settings_page")
+        self._build_settings(settings)
+        self._settings_scroll = QScrollArea()
+        self._settings_scroll.setWidgetResizable(True)
+        self._settings_scroll.setWidget(settings)
+        self._settings_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._pages.addWidget(self._settings_scroll)
+
+        self.chat_view = ChatView()
+        self.chat_view.turn_started.connect(self._on_turn_started)
+        self.chat_view.busy_changed.connect(self.header.set_busy)
+        self._pages.addWidget(self.chat_view)
+
+        self.set_view(VIEW_SETTINGS)
+        self.model_selector.model_changed.connect(self._on_base_model_changed)
+        self.effort_combo.activated.connect(self._on_effort_activated)
+
+    # ------------------------------------------------------------------
+    # Settings page
+    # ------------------------------------------------------------------
+
+    def _build_settings(self, page: QWidget) -> None:
+        layout = QVBoxLayout(page)
         layout.setContentsMargins(16, 12, 16, 16)
         layout.setSpacing(6)
 
@@ -44,16 +88,14 @@ class _LLMForm(QWidget):
 
         layout.addSpacing(4)
 
-        name_label = QLabel("Name")
-        layout.addWidget(name_label)
+        layout.addWidget(QLabel("Name"))
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText("Node name...")
         layout.addWidget(self.title_edit)
 
         layout.addSpacing(4)
 
-        model_label = QLabel("Model")
-        layout.addWidget(model_label)
+        layout.addWidget(QLabel("Model"))
         self.model_selector = ModelSelector(popup_parent=self)
         populate_model_selector(self.model_selector)
         layout.addWidget(self.model_selector)
@@ -130,8 +172,7 @@ class _LLMForm(QWidget):
         )
         named_layout.addWidget(self.restart_session_checkbox)
 
-        resume_named_label = QLabel("Resume session ID")
-        named_layout.addWidget(resume_named_label)
+        named_layout.addWidget(QLabel("Resume session ID"))
 
         self.resume_named_session_combo = QComboBox()
         self.resume_named_session_combo.setPlaceholderText("")
@@ -146,14 +187,12 @@ class _LLMForm(QWidget):
 
         layout.addSpacing(4)
 
-        prepend_label = QLabel("Prepend")
-        layout.addWidget(prepend_label)
+        layout.addWidget(QLabel("Prepend"))
         self.prepend_template_dropdown = CheckedDropdown(popup_parent=self)
         self.prepend_template_dropdown.set_placeholder_text("")
         layout.addWidget(self.prepend_template_dropdown)
 
-        append_label = QLabel("Append")
-        layout.addWidget(append_label)
+        layout.addWidget(QLabel("Append"))
         self.append_template_dropdown = CheckedDropdown(popup_parent=self)
         self.append_template_dropdown.set_placeholder_text("")
         layout.addWidget(self.append_template_dropdown)
@@ -168,21 +207,6 @@ class _LLMForm(QWidget):
 
         layout.addSpacing(2)
 
-        self._tabs = QTabWidget()
-        self._tabs.setTabPosition(QTabWidget.TabPosition.North)
-        self._tabs.setDocumentMode(True)
-        layout.addWidget(self._tabs, stretch=1)
-
-        self._prompt_tab = QWidget()
-        prompt_tab_layout = QVBoxLayout(self._prompt_tab)
-        prompt_tab_layout.setContentsMargins(0, 0, 0, 0)
-        prompt_tab_layout.setSpacing(0)
-
-        self._prompt_frame = QFrame()
-        prompt_container_layout = QVBoxLayout(self._prompt_frame)
-        prompt_container_layout.setContentsMargins(0, 0, 0, 0)
-        prompt_container_layout.setSpacing(4)
-
         self._prompt_splitter = QSplitter(Qt.Orientation.Vertical)
         self._prompt_splitter.setChildrenCollapsible(False)
 
@@ -190,8 +214,7 @@ class _LLMForm(QWidget):
         prompt_layout = QVBoxLayout(prompt_editor_frame)
         prompt_layout.setContentsMargins(0, 0, 0, 0)
         prompt_layout.setSpacing(4)
-        prompt_label = QLabel("Prompt")
-        prompt_layout.addWidget(prompt_label)
+        prompt_layout.addWidget(QLabel("Prompt"))
         self.prompt_edit = QPlainTextEdit()
         self.prompt_edit.setPlaceholderText("Enter your prompt here...")
         self.prompt_edit.setMinimumHeight(100)
@@ -205,8 +228,7 @@ class _LLMForm(QWidget):
         preview_layout = QVBoxLayout(preview_frame)
         preview_layout.setContentsMargins(0, 0, 0, 0)
         preview_layout.setSpacing(4)
-        preview_label = QLabel("Prompt Preview")
-        preview_layout.addWidget(preview_label)
+        preview_layout.addWidget(QLabel("Prompt Preview"))
         self.prompt_preview_edit = QPlainTextEdit()
         self.prompt_preview_edit.setReadOnly(True)
         self.prompt_preview_edit.setPlaceholderText(
@@ -217,38 +239,46 @@ class _LLMForm(QWidget):
         self._prompt_splitter.addWidget(preview_frame)
         self._prompt_splitter.setSizes([4, 1])
 
-        prompt_container_layout.addWidget(self._prompt_splitter)
-        prompt_tab_layout.addWidget(self._prompt_frame)
-        self._tabs.addTab(self._prompt_tab, "Prompt")
+        layout.addWidget(self._prompt_splitter, stretch=1)
 
-        self._output_tab = QWidget()
-        output_tab_layout = QVBoxLayout(self._output_tab)
-        output_tab_layout.setContentsMargins(0, 0, 0, 0)
-        output_tab_layout.setSpacing(4)
+    # ------------------------------------------------------------------
+    # Pages
+    # ------------------------------------------------------------------
 
-        self._output_frame = QFrame()
-        out_layout = QVBoxLayout(self._output_frame)
-        out_layout.setContentsMargins(0, 0, 0, 0)
-        out_layout.setSpacing(4)
-        self.output_label = QLabel("Output")
-        out_layout.addWidget(self.output_label)
-        self.output_tabs = QTabWidget()
-        self.output_tabs.setTabPosition(QTabWidget.TabPosition.North)
-        self.output_tabs.setDocumentMode(True)
-        self.output_tabs.setVisible(False)
-        out_layout.addWidget(self.output_tabs, stretch=1)
-        self.output_edit = QPlainTextEdit()
-        self.output_edit.setReadOnly(True)
-        self.output_edit.setMinimumHeight(80)
-        self.output_edit.setPlaceholderText("No output yet.")
-        out_layout.addWidget(self.output_edit)
-        output_tab_layout.addWidget(self._output_frame, stretch=1)
-        self._tabs.addTab(self._output_tab, "Output")
+    def view(self) -> str:
+        return self.header.view()
 
-        self._call_editors: list[QPlainTextEdit] = []
+    def set_view(self, view: str) -> None:
+        self.header.set_view(view)
+        self._pages.setCurrentIndex(1 if view == VIEW_OUTPUT else 0)
 
-        self.model_selector.model_changed.connect(self._on_base_model_changed)
-        self.effort_combo.activated.connect(self._on_effort_activated)
+    def _on_view_toggled(self, view: str) -> None:
+        self._pages.setCurrentIndex(1 if view == VIEW_OUTPUT else 0)
+        self.view_changed.emit(view)
+
+    def _on_turn_started(self) -> None:
+        if self.view() != VIEW_OUTPUT:
+            self.set_view(VIEW_OUTPUT)
+
+    def bind_transcript(self, transcript: Optional[ChatTranscript], *, title: str, session_label: str, shared: bool) -> None:
+        self.header.set_title(title)
+        self.header.set_crumb(session_label)
+        self.chat_view.set_transcript(transcript, show_sender=shared)
+
+    def set_header_title(self, title: str) -> None:
+        self.header.set_title(title)
+
+    def set_text_scale(self, scale: float) -> None:
+        self.header.set_text_scale(scale)
+        self.chat_view.set_text_scale(scale)
+
+    def chat_widgets(self) -> tuple[QWidget, QWidget]:
+        """Widgets whose fonts the panel zoom must leave to ``set_text_scale``."""
+        return self.header, self.chat_view
+
+    # ------------------------------------------------------------------
+    # Model / effort
+    # ------------------------------------------------------------------
 
     def set_model_state(self, full_model_id: Optional[str]) -> None:
         """Load a stored ``<model>[:<variant>]`` id into both selectors."""
@@ -295,6 +325,10 @@ class _LLMForm(QWidget):
         if self.effort_combo.count():
             self.effort_combo.setCurrentIndex(target_index)
         self.effort_combo.blockSignals(False)
+
+    # ------------------------------------------------------------------
+    # Profile / sessions / templates
+    # ------------------------------------------------------------------
 
     def set_profile_state(
         self,
@@ -393,87 +427,3 @@ class _LLMForm(QWidget):
         self.append_template_dropdown.set_items(options)
         self.prepend_template_dropdown.set_checked_ids(checked_prepend_ids)
         self.append_template_dropdown.set_checked_ids(checked_append_ids)
-
-    def show_output(self, visible: bool):
-        _ = visible
-        self._tabs.setTabEnabled(1, True)
-
-    def clear_output(self) -> None:
-        self.output_edit.clear()
-        self.output_edit.setVisible(True)
-        while self.output_tabs.count():
-            self.output_tabs.removeTab(0)
-        self._call_editors.clear()
-        self.output_tabs.setVisible(False)
-
-    def set_output_text(self, text: str) -> None:
-        self.clear_output()
-        call_blocks = self._parse_call_blocks(text.splitlines())
-        if not call_blocks:
-            self.output_edit.setPlainText(text)
-            return
-
-        self.output_edit.setVisible(False)
-        self.output_tabs.setVisible(True)
-        for call_number, call_lines in call_blocks:
-            editor = self._create_call_editor()
-            editor.setPlainText("\n".join(call_lines).rstrip("\n"))
-            self.output_tabs.addTab(editor, f"Call {call_number}")
-            self._call_editors.append(editor)
-        self.output_tabs.setCurrentIndex(self.output_tabs.count() - 1)
-
-    def append_output_line(self, line: str) -> None:
-        match = self._CALL_HEADER_RE.fullmatch(line.strip())
-        if match:
-            call_number = match.group(1)
-            editor = self._create_call_editor()
-            self.output_edit.setVisible(False)
-            self.output_tabs.setVisible(True)
-            self.output_tabs.addTab(editor, f"Call {call_number}")
-            self._call_editors.append(editor)
-            self.output_tabs.setCurrentIndex(self.output_tabs.count() - 1)
-            return
-
-        if self._call_editors:
-            self._call_editors[-1].appendPlainText(line)
-            return
-
-        self.output_edit.appendPlainText(line)
-
-    def _create_call_editor(self) -> QPlainTextEdit:
-        editor = QPlainTextEdit()
-        editor.setReadOnly(True)
-        editor.setMinimumHeight(80)
-        editor.setPlaceholderText("No output yet.")
-        editor.setObjectName("llm_call_output_edit")
-        font = editor.font()
-        base_size = max(font.pointSize(), self.output_edit.font().pointSize(), 8)
-        font.setPointSize(base_size + self._CALL_OUTPUT_FONT_BUMP)
-        editor.setFont(font)
-        return editor
-
-    @classmethod
-    def _parse_call_blocks(cls, lines: list[str]) -> list[tuple[int, list[str]]]:
-        blocks: list[tuple[int, list[str]]] = []
-        current_call_number: int | None = None
-        current_lines: list[str] = []
-        saw_call_header = False
-
-        for line in lines:
-            match = cls._CALL_HEADER_RE.fullmatch(line.strip())
-            if match:
-                saw_call_header = True
-                if current_call_number is not None:
-                    blocks.append((current_call_number, current_lines))
-                current_call_number = int(match.group(1))
-                current_lines = []
-                continue
-            if current_call_number is not None:
-                current_lines.append(line)
-
-        if current_call_number is not None:
-            blocks.append((current_call_number, current_lines))
-
-        if not saw_call_header:
-            return []
-        return blocks

@@ -1,0 +1,55 @@
+{
+  "nodes": [
+    {
+      "node_type": "loop",
+      "id": "78d01f66-6194-4bff-873d-660c96166fcd",
+      "label_index": 1,
+      "x": -58.40925579687513,
+      "y": 48.407893421874974,
+      "name": "Loop 1",
+      "loop_count": 1
+    },
+    {
+      "id": "01df36b3-edea-4263-8925-e4d260efbe96",
+      "label_index": 3,
+      "x": 584.1438921874995,
+      "y": -200.0756984374999,
+      "name": "LLM 3",
+      "model": "gpt-5.6-terra:medium",
+      "prompt": "Find a PR that was made by me review it, fix all finds and merge it while dealing with any conflicts. you are part of an automated workflow so i will not be able to answer any questions if you cannot find any PR's opened by me or you cannot for some reason merge the existing ones then do nothing",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    }
+  ],
+  "connections": [
+    {
+      "from": "start",
+      "to": "78d01f66-6194-4bff-873d-660c96166fcd"
+    },
+    {
+      "from": "78d01f66-6194-4bff-873d-660c96166fcd",
+      "to": "01df36b3-edea-4263-8925-e4d260efbe96",
+      "source_port": "loop"
+    },
+    {
+      "from": "01df36b3-edea-4263-8925-e4d260efbe96",
+      "to": "78d01f66-6194-4bff-873d-660c96166fcd"
+    }
+  ],
+  "node_counter": 3,
+  "start_pos": [
+    -483.64565624999994,
+    -45.24701875
+  ],
+  "named_sessions": []
+}

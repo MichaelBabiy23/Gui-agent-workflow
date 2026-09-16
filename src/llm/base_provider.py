@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from .stream_events import StreamEvent
+
 
 @dataclass(frozen=True)
 class ModelVariant:
@@ -100,7 +102,8 @@ def _build_legacy_aliases() -> Dict[str, str]:
         "low": "low",
         "medium": "medium",
         "high": "high",
-        "max": "xhigh",
+        "xhigh": "xhigh",
+        "max": "max",
     }
     sonnet_sources = (
         "claude-sonnet-4-6",
@@ -141,6 +144,12 @@ def _build_legacy_aliases() -> Dict[str, str]:
         aliases[source] = defaults[source]
 
     aliases["grok-4.5:xhigh"] = "grok-4.5:high"
+    aliases["x-preview-f-free"] = "big-pickle"
+    aliases["hy3-free"] = "big-pickle"
+    aliases["muse-spark-1.2-contributor-free"] = "muse-spark-1.3-contributor-free"
+    aliases["claude-fable-5"] = "claude-fable-5-1:high"
+    for effort in ("low", "medium", "high", "xhigh", "max"):
+        aliases[f"claude-fable-5:{effort}"] = f"claude-fable-5-1:{effort}"
 
     return aliases
 
@@ -224,11 +233,16 @@ class BaseLLMProvider(ABC):
         _ = model
         return False
 
-    def structured_output_progress_lines(
+    def structured_output_events(
         self,
         line: str,
         model: Optional[str] = None,
-    ) -> List[str]:
+    ) -> List["StreamEvent"]:
+        """Map one raw structured-output line onto live transcript events.
+
+        Called for every stdout line while the subprocess runs. The default
+        emits nothing; providers translate their own JSON schema here.
+        """
         _ = line, model
         return []
 

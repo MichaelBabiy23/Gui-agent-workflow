@@ -1,0 +1,275 @@
+{
+  "nodes": [
+    {
+      "id": "73d58f8a-a27a-4c0c-aff4-99fa8db01c9d",
+      "label_index": 1,
+      "x": 467.02935843750004,
+      "y": -160.0613571875,
+      "name": "LLM 1",
+      "model": "gpt-5.4",
+      "prompt": "there is a file called Brainstorming.txt i want you to add a new section under the title \"agent 1\" where you give your thoughts and how you think we should approach the solution from here. software only.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": true,
+      "save_session_name": "agent1",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "019f21e3-3abf-7220-b2d0-59b36ee5ea70",
+      "saved_session_provider": "codex",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "node_type": "create_file",
+      "id": "3cffc1fd-bab2-4cf6-aa65-e568dedca962",
+      "label_index": 2,
+      "x": -135.0,
+      "y": 22.0,
+      "name": "File Op 2",
+      "filename": "Brainstorming.txt"
+    },
+    {
+      "id": "60bd33cd-bd82-4eb0-807d-3ab8dd180053",
+      "label_index": 3,
+      "x": 654.1248723125001,
+      "y": 38.58639974999991,
+      "name": "LLM 1",
+      "model": "gpt-5.5",
+      "prompt": "there is a file called Brainstorming.txt i want you to add a new section under the title \"agent 2\" where you give your thoughts and how you think we should approach the solution from here. software only.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": true,
+      "save_session_name": "agent 2",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "019f21e3-6399-7d23-abfb-ccf52de3be87",
+      "saved_session_provider": "codex",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "eea2b106-9286-4ef3-ba91-1994699e0d99",
+      "label_index": 4,
+      "x": 826.9594834375002,
+      "y": 250.24739281249987,
+      "name": "LLM 1",
+      "model": "claude-opus-4-8:medium",
+      "prompt": "there is a file called Brainstorming.txt i want you to add a new section under the title \"agent 3\" where you give your thoughts and how you think we should approach the solution from here. software only.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": true,
+      "save_session_name": "agent 3",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "164ac596-8841-4733-bce3-c83987af9095",
+      "label_index": 5,
+      "x": 961.2422334374999,
+      "y": 454.5220178124997,
+      "name": "LLM 1",
+      "model": "gpt-5.5:high",
+      "prompt": "there is a file called Brainstorming.txt i want you to add a new section under the title \"agent 4\" where you give your thoughts and how you think we should approach the solution from here. software only.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": true,
+      "save_session_name": "agent 4",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "d7e7eca9-4d05-4912-9416-16d1b4679509",
+      "label_index": 6,
+      "x": 1507.1948680624992,
+      "y": -144.82896351562482,
+      "name": "LLM 6",
+      "model": "gpt-5.4",
+      "prompt": "more agents have added their input append a section with your new thoughts and ideas. we need a software route that will actually work.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "agent1",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "2f018f0d-6b2a-48ba-b454-bf28715a703a",
+      "label_index": 7,
+      "x": 1624.7897204531248,
+      "y": 22.162578109375104,
+      "name": "LLM 6",
+      "model": "gpt-5.5",
+      "prompt": "more agents have added their input append a section with your new thoughts and ideas. we need a software route that will actually work.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "agent 2",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "dca8cc10-da9b-41ae-a4c1-83cdc700ad5a",
+      "label_index": 8,
+      "x": 1780.884192703124,
+      "y": 223.12134198437508,
+      "name": "LLM 6",
+      "model": "claude-opus-4-8:medium",
+      "prompt": "more agents have added their input append a section with your new thoughts and ideas. we need a software route that will actually work.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "agent 3",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "e8426a68-5536-47f8-bc4f-be3d55488288",
+      "label_index": 9,
+      "x": 1943.9691023906244,
+      "y": 429.6175208125002,
+      "name": "LLM 6",
+      "model": "gpt-5.5:high",
+      "prompt": "more agents have added their input append a section with your new thoughts and ideas. we need a software route that will actually work.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "agent 4",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    },
+    {
+      "id": "e3bb4765-df15-450a-8c8a-2105cc5179b2",
+      "label_index": 10,
+      "x": 2632.7516809531226,
+      "y": -62.069789953125024,
+      "name": "LLM 10",
+      "model": "gpt-5.5:xhigh",
+      "prompt": "there is a file called brainstorming.txt. append to end of it a conclustions section. make sure to go throught everything we have in the repo and everything the agents suggested and think of your own ideas and then add a conclustions section in the file.",
+      "profile_name": "",
+      "resume_session_enabled": false,
+      "save_session_enabled": false,
+      "save_session_name": "",
+      "restart_session_enabled": false,
+      "resume_named_session_name": "",
+      "saved_session_id": "",
+      "saved_session_provider": "",
+      "prepend_template_ids": [],
+      "append_template_ids": [],
+      "prepend_disabled_global_template_ids": [],
+      "append_disabled_global_template_ids": []
+    }
+  ],
+  "connections": [
+    {
+      "from": "start",
+      "to": "3cffc1fd-bab2-4cf6-aa65-e568dedca962"
+    },
+    {
+      "from": "3cffc1fd-bab2-4cf6-aa65-e568dedca962",
+      "to": "73d58f8a-a27a-4c0c-aff4-99fa8db01c9d"
+    },
+    {
+      "from": "73d58f8a-a27a-4c0c-aff4-99fa8db01c9d",
+      "to": "60bd33cd-bd82-4eb0-807d-3ab8dd180053"
+    },
+    {
+      "from": "60bd33cd-bd82-4eb0-807d-3ab8dd180053",
+      "to": "eea2b106-9286-4ef3-ba91-1994699e0d99"
+    },
+    {
+      "from": "eea2b106-9286-4ef3-ba91-1994699e0d99",
+      "to": "164ac596-8841-4733-bce3-c83987af9095"
+    },
+    {
+      "from": "164ac596-8841-4733-bce3-c83987af9095",
+      "to": "d7e7eca9-4d05-4912-9416-16d1b4679509"
+    },
+    {
+      "from": "d7e7eca9-4d05-4912-9416-16d1b4679509",
+      "to": "2f018f0d-6b2a-48ba-b454-bf28715a703a"
+    },
+    {
+      "from": "2f018f0d-6b2a-48ba-b454-bf28715a703a",
+      "to": "dca8cc10-da9b-41ae-a4c1-83cdc700ad5a"
+    },
+    {
+      "from": "dca8cc10-da9b-41ae-a4c1-83cdc700ad5a",
+      "to": "e8426a68-5536-47f8-bc4f-be3d55488288"
+    },
+    {
+      "from": "e8426a68-5536-47f8-bc4f-be3d55488288",
+      "to": "e3bb4765-df15-450a-8c8a-2105cc5179b2"
+    }
+  ],
+  "node_counter": 11,
+  "start_pos": [
+    -460.0,
+    14.0
+  ],
+  "named_sessions": [
+    {
+      "name": "agent 2",
+      "owner_node_id": "60bd33cd-bd82-4eb0-807d-3ab8dd180053",
+      "provider": "codex",
+      "session_id": "019f21e3-6399-7d23-abfb-ccf52de3be87"
+    },
+    {
+      "name": "agent 3",
+      "owner_node_id": "eea2b106-9286-4ef3-ba91-1994699e0d99",
+      "provider": "claude",
+      "session_id": ""
+    },
+    {
+      "name": "agent 4",
+      "owner_node_id": "164ac596-8841-4733-bce3-c83987af9095",
+      "provider": "codex",
+      "session_id": ""
+    },
+    {
+      "name": "agent1",
+      "owner_node_id": "73d58f8a-a27a-4c0c-aff4-99fa8db01c9d",
+      "provider": "codex",
+      "session_id": "019f21e3-3abf-7220-b2d0-59b36ee5ea70"
+    }
+  ]
+}

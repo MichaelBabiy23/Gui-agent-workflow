@@ -25,12 +25,14 @@ def load_llm_form(panel, node) -> None:
     form.prompt_edit.setPlainText(node.prompt_text)
     refresh_llm_template_controls(panel, node)
 
-    if node.output_text:
-        form.set_output_text(node.output_text.rstrip("\n"))
-        form.show_output(True)
-    else:
-        form.clear_output()
-        form.show_output(False)
+    from src.gui.canvas.llm_output import llm_session_label, llm_shared_session_name
+
+    form.bind_transcript(
+        node.transcript,
+        title=node.title,
+        session_label=llm_session_label(node),
+        shared=bool(llm_shared_session_name(node)),
+    )
 
     form.title_edit.blockSignals(False)
     form.model_selector.blockSignals(False)
