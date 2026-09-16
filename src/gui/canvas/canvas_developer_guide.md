@@ -20,6 +20,7 @@ The `canvas/` subpackage houses `WorkflowCanvas` and its four behavior mixins. S
 - All undo-pushable mutations go through `WorkflowCanvas._undo_stack`.
 - `_undo_in_progress` is set during undo/redo mutations so panel commit handlers do not push duplicate commands.
 - `notify_node_changed(node_id)` re-emits `selection_changed` after undo/redo attribute changes so the properties panel refreshes automatically.
+- LLM-node validation resolves the model to a provider and additionally requires that provider's CLI to be installed (`src/llm/cli_detection.py`); a missing CLI is reported as `needs the "<cli>" CLI, which is not installed`.
 - `refresh_node_validation_state()` applies run-validation rules to all non-start nodes and toggles each node's invalid flag; invalid nodes render with a red border until required fields are fixed.
 - `_pending_join_waits` must stay in sync with `_join_wait_counts`; otherwise `_check_drain()` can incorrectly mark a workflow complete while join barriers are still waiting.
 - `_lineage_variables` carries the active variable map for each execution lineage. Fan-out must copy parent state into child lineages, and join release must merge waiting lineage maps before downstream nodes run.

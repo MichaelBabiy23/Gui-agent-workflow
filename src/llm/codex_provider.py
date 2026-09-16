@@ -70,7 +70,11 @@ class CodexProvider(BaseLLMProvider):
                       working_directory: Optional[str] = None,
                       session_id: Optional[str] = None) -> List[str]:
         cmd = ["codex", "exec"]
-        cmd.extend(["--skip-git-repo-check", "--full-auto", "--json"])
+        cmd.extend([
+            "--skip-git-repo-check",
+            "--approve-for-me",
+            "--json",
+        ])
 
         normalized_wd: Optional[str] = None
         if working_directory and str(working_directory).strip():

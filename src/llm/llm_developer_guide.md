@@ -10,6 +10,7 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 - `grok_provider.py`: Grok Build CLI catalog, command builder, and JSON result parsing.
 - `opencode_provider.py`: OpenCode CLI catalog (free OpenCode Zen models), command builder, and JSON-event output parsing.
 - `stream_events.py`: `StreamEvent`, the provider-neutral live event (`session`, `assistant`, `assistant_delta`, `tool`, `diagnostic`) plus helpers for plain-line diagnostics and tool-output stringification. The GUI chat transcript consumes these without knowing provider schemas.
+- `cli_detection.py`: Filesystem-only detection of which provider CLIs are installed. `locate_cli(executable)` checks `PATH` via `shutil.which`, then the native-installer dirs (`~/.local/bin`, `~/.grok/bin`, `~/.opencode/bin`, `~/.codex/bin`, `~/.claude/bin`) and `%APPDATA%/npm` (`.exe`/`.cmd`/`.bat` on Windows). `detect_installed_clis(force=False)` caches a `CliStatus` per registered provider for the process lifetime; `installed_providers()` / `missing_providers()` / `is_provider_installed(provider)` are the query helpers. No subprocess is spawned.
 - `profiles.py`: Discovers per-provider account profiles by scanning the user's home directory and maps a profile to the environment overlay that selects it.
 - `prompt_injection.py`: Prompt template models, persistent JSON storage, run-option normalization, per-node effective-selection helpers, and prompt assembly helpers that place enabled template content plus optional one-off context on either side of the base prompt.
 - `__init__.py`: Explicitly re-exports all provider modules so they self-register at startup. Registry order (and dropdown order): claude, codex, grok, opencode.
@@ -29,6 +30,7 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 
 ## Provider Contract
 - `name` and `display_name` identify the provider in UI and registry.
+- `cli_executable` names the binary the provider runs (defaults to `name`). CLI detection looks this up; override it if a provider's command is not literally its registry name.
 - `get_model_entries()` returns the structured catalog; `get_models()` derives flat lookup tuples from it.
 - `build_command(prompt, model, working_directory, session_id)` returns argv for subprocess execution. The incoming `model` is the stored composed id; providers split off the variant suffix themselves.
 - `uses_stdin` and `get_stdin_prompt()` define how prompt text is delivered to the subprocess. Claude uses stdin; Codex, Grok, and OpenCode pass the prompt as the final command argument.
@@ -42,8 +44,8 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 - Claude, Codex, Grok, and OpenCode are the resumable providers.
 - Saved session IDs are persisted by the GUI on each LLM node, not in a separate sidecar file.
 - Claude runs `claude --dangerously-skip-permissions --output-format stream-json --verbose -p` (prompt on stdin) and resumes with `--resume <session_id>`. Stream events: `system/init` carries the session id, each `assistant` message's `text` parts become assistant items keyed `<message id>:<index>` and `tool_use` parts become running tool rows, `user` messages' `tool_result` parts complete or fail those rows by `tool_use_id`, and the final `result` line is left to the worker's finished/error path.
-- Codex JSON output emits `thread.started` with `thread_id`; the GUI stores that thread id in the node's saved-session slot and resumes with `codex exec ... resume <thread_id> <prompt>`.
-- Codex uses `-C <dir>` for working-directory scoping.
+- Codex always runs `codex exec --skip-git-repo-check --approve-for-me --json`. JSON output emits `thread.started` with `thread_id`; the GUI stores that thread id in the node's saved-session slot and resumes with `codex exec ... resume <thread_id> <prompt>`.
+- Codex uses `-C <dir>` for working-directory scoping. `--approve-for-me` auto-reviews approval prompts under the workspace-write sandbox so `codex exec` does not wait for a TUI; it cannot be combined with `--sandbox`.
 - Grok resumes with `--resume <session_id>`; session ids come from the JSON result object's `sessionId`. It always runs with `--always-approve --no-alt-screen --no-auto-update --output-format json` and scopes with `--cwd <dir>`.
 - OpenCode resumes with `--session <session_id>`; session ids (`ses_...`) come from each JSON event's top-level `sessionID`. It uses `--dir <dir>` for working-directory scoping and always runs with `--format json --auto`.
 
@@ -79,7 +81,8 @@ Defines provider contracts and the registry used by the UI and worker layer to i
 
 ## When To Edit
 - Add or remove models or variants for a provider: corresponding `*_provider.py` (`ENTRIES` list).
-- Add a new provider: create the provider file and import it in `__init__.py`.
+- Add a new provider: create the provider file and import it in `__init__.py`. It is detected automatically as long as `cli_executable` is the binary name.
+- Change where CLIs are searched for: `_fallback_dirs()` in `cli_detection.py`.
 - Add profile support to a provider: override `supports_profiles()` and add a rule to `_PROVIDER_RULES` in `profiles.py`.
 - Change global provider API rules, variant composition, or normalization: `base_provider.py`.
 - Change template storage rules, limits, or prompt assembly format: `prompt_injection.py`.

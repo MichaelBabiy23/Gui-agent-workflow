@@ -12,7 +12,7 @@ Implements the interactive Qt UI for composing and running LLM workflows.
 - `control_flow/`: Coordination-oriented nodes such as `JoinNode`.
 - `llm_node.py`: Shared graphics-item base plus `LLMNode` and `StartNode`. `WorkflowNode` carries `is_invalid`; invalid nodes render a red border while not actively running or looping. `LLMNode` displays the chosen model's provider logo in its header and owns a `transcript: ChatTranscript` that `clear_output()` resets.
 - `checked_dropdown.py`: Reusable checked popup dropdown used by per-node prompt-template selection controls.
-- `llm_widget.py`: `ModelSelector`, model list widget, provider icon helpers, catalog variant lookup helpers (`variant_options_for`, `default_variant_for`), and `populate_model_selector` (one row per catalog model, without variants).
+- `llm_widget.py`: `ModelSelector`, model list widget, provider icon helpers, catalog variant lookup helpers (`variant_options_for`, `default_variant_for`), `populate_model_selector` (one row per catalog model, without variants, listing only providers whose CLI is installed; `rescan=True` re-detects first), and `missing_cli_message()` for the form's not-installed note. `ModelSelector.set_model_id` keeps a stored id whose provider CLI is missing and shows its label with a "CLI not installed" suffix instead of clearing it.
 - `variables/`: Variable-node package with the graphics item, validation helpers, and variable form widget.
 - `file_op_node.py`: `FileOpNode` plus convenience factories and `AttentionNode`.
 - `git_action_node.py`: Compact node for git operations with action/message settings.
@@ -35,6 +35,7 @@ Implements the interactive Qt UI for composing and running LLM workflows.
 - Overview data is maintained by `MainWindow` and includes working directory, connection count, selected counts, node counts by type, invalid node titles, prompt injection payload, resumable LLM count, and saved-session count.
 - Before any run, reachable nodes are validated with node-type rules (`LLMNode`, `VariableNode`, `FileOpNode`, `ConditionalNode`, `AttentionNode`, `LoopNode`, `JoinNode`, `GitActionNode`, `ScriptNode`).
 - The same validation rules drive live node highlighting: invalid nodes get a red border until required fields are valid.
+- Installed provider CLIs are detected at startup (see `src/llm/cli_detection.py`). The Model dropdown lists only installed providers, the LLM form shows a `Not installed: ...` note with a `Rescan` button when any are missing, and run validation blocks LLM nodes whose model needs a missing CLI.
 - Prompt injection preview in selected LLM forms stays aligned with the current preview or active run context plus the selected node's saved prepend/append template overrides, and applies any uniquely-resolved reachable upstream `$name` substitutions inside the node prompt text.
 - `JoinNode` is a barrier: it waits for `wait_for_count` arrivals from the same parallel split group before it releases one downstream continuation.
 

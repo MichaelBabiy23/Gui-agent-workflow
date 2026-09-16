@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.llm.base_provider import LLMProviderRegistry, normalize_model_id
+from src.llm.cli_detection import detect_installed_clis, installed_providers, missing_providers
 
 NODE_WIDTH = 420
 ICON_SIZE = 16
@@ -157,6 +158,15 @@ class ModelSelector(QWidget):
                 return
 
         self._clear_selection()
+        # The model is known to the catalog but its provider CLI is not
+        # installed, so it has no dropdown row. Keep the stored id and say why.
+        provider, entry = find_catalog_entry(normalized_model_id)
+        if provider is None or entry is None:
+            return
+        self._current_model_id = normalized_model_id
+        self._current_label = f"{entry.label} ({provider.cli_executable} CLI not installed)"
+        self._toggle_button.setIcon(provider_icon(provider.name))
+        self._update_button_label()
 
     def set_enabled(self, enabled: bool):
         self._toggle_button.setEnabled(enabled)
@@ -464,10 +474,17 @@ def _fallback_provider_icon(provider_name: str) -> QIcon:
     return QIcon(pixmap)
 
 
-def populate_model_selector(selector: ModelSelector) -> None:
-    """Fill a ModelSelector with one entry per catalog model (no variants)."""
+def populate_model_selector(selector: ModelSelector, rescan: bool = False) -> None:
+    """Fill a ModelSelector with one row per catalog model (no variants).
+
+    Only providers whose CLI is installed on this machine are listed. Pass
+    ``rescan=True`` to re-detect CLIs first (e.g. after installing one).
+    """
     selector.clear()
-    providers = get_registered_providers()
+    get_registered_providers()
+    if rescan:
+        detect_installed_clis(force=True)
+    providers = installed_providers()
     first_model_index = -1
     model_rows = 0
 
@@ -486,6 +503,17 @@ def populate_model_selector(selector: ModelSelector) -> None:
 
     selector.clear()
     selector.set_enabled(False)
+
+
+def missing_cli_message() -> str:
+    """Human-readable note about providers whose CLI was not found, or ""."""
+    missing = missing_providers()
+    if not missing:
+        return ""
+    names = ", ".join(f"{prov.display_name} ({prov.cli_executable})" for prov in missing)
+    if len(missing) == len(get_registered_providers()):
+        return f"No LLM CLI found on this machine. Install one of: {names}."
+    return f"Not installed: {names}."
 
 
 def find_catalog_entry(base_model_id: str):

@@ -33,6 +33,7 @@ from src.gui.llm_chat import TURN_COMPLETED, TURN_FAILED, TURN_INTERRUPTED
 from src.llm.stream_events import EVENT_ASSISTANT_DELTA, LEVEL_ERROR, LEVEL_WARNING, StreamEvent
 from src.gui.canvas.llm_resume import llm_resume_serial_key, llm_resume_session_id, release_serial_llm_resume_slot
 from src.gui.workflow_io import get_provider_for_model
+from src.llm.cli_detection import is_provider_installed
 from src.llm.profiles import resolve_profile_env
 from src.platform_power import allow_sleep, prevent_sleep, sleep_prevented
 
@@ -265,8 +266,14 @@ class _ExecutionMixin:
         )
         if not node.model_id:
             reasons.append("has no model selected")
-        elif get_provider_for_model(node.model_id) is None:
-            reasons.append(f'has unknown model "{node.model_id}"')
+        else:
+            provider = get_provider_for_model(node.model_id)
+            if provider is None:
+                reasons.append(f'has unknown model "{node.model_id}"')
+            elif not is_provider_installed(provider):
+                reasons.append(
+                    f'needs the "{provider.cli_executable}" CLI, which is not installed'
+                )
         return reasons
 
     def _validation_errors_by_node(

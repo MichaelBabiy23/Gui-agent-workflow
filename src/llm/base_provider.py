@@ -169,6 +169,15 @@ class BaseLLMProvider(ABC):
     def display_name(self) -> str:
         """Human-readable name (e.g. 'Claude')."""
 
+    @property
+    def cli_executable(self) -> str:
+        """Name of the CLI binary this provider runs (looked up on PATH).
+
+        Defaults to the provider name; ``src/llm/cli_detection.py`` uses it
+        to decide whether the provider is installed on this machine.
+        """
+        return self.name
+
     @abstractmethod
     def get_model_entries(self) -> List[ModelEntry]:
         """Return the selectable catalog as structured entries."""

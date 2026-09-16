@@ -18,9 +18,11 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QSplitter,
@@ -31,7 +33,13 @@ from PySide6.QtWidgets import (
 
 from ..checked_dropdown import CheckedDropdown
 from ..llm_chat import VIEW_OUTPUT, VIEW_SETTINGS, ChatHeader, ChatTranscript, ChatView
-from ..llm_widget import ModelSelector, default_variant_for, populate_model_selector, variant_options_for
+from ..llm_widget import (
+    ModelSelector,
+    default_variant_for,
+    missing_cli_message,
+    populate_model_selector,
+    variant_options_for,
+)
 from src.llm.base_provider import compose_model_variant, normalize_model_id, split_model_variant
 
 
@@ -43,6 +51,7 @@ class _LLMForm(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._last_full_model_id = ""
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -99,6 +108,23 @@ class _LLMForm(QWidget):
         self.model_selector = ModelSelector(popup_parent=self)
         populate_model_selector(self.model_selector)
         layout.addWidget(self.model_selector)
+
+        self._cli_status_widget = QWidget()
+        cli_layout = QHBoxLayout(self._cli_status_widget)
+        cli_layout.setContentsMargins(0, 0, 0, 0)
+        cli_layout.setSpacing(6)
+        self.cli_status_label = QLabel("")
+        self.cli_status_label.setObjectName("warning_label")
+        self.cli_status_label.setWordWrap(True)
+        cli_layout.addWidget(self.cli_status_label, stretch=1)
+        self.rescan_cli_button = QPushButton("Rescan")
+        self.rescan_cli_button.setToolTip(
+            "Look again for installed provider CLIs (claude, codex, grok, opencode)."
+        )
+        self.rescan_cli_button.clicked.connect(self.rescan_installed_clis)
+        cli_layout.addWidget(self.rescan_cli_button, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._cli_status_widget)
+        self._refresh_cli_status()
 
         self._effort_widget = QWidget()
         effort_layout = QVBoxLayout(self._effort_widget)
@@ -280,8 +306,21 @@ class _LLMForm(QWidget):
     # Model / effort
     # ------------------------------------------------------------------
 
+    def rescan_installed_clis(self) -> None:
+        """Re-detect provider CLIs and rebuild the Model dropdown."""
+        current = self._last_full_model_id
+        populate_model_selector(self.model_selector, rescan=True)
+        self.set_model_state(current)
+        self._refresh_cli_status()
+
+    def _refresh_cli_status(self) -> None:
+        message = missing_cli_message()
+        self.cli_status_label.setText(message)
+        self._cli_status_widget.setVisible(bool(message))
+
     def set_model_state(self, full_model_id: Optional[str]) -> None:
         """Load a stored ``<model>[:<variant>]`` id into both selectors."""
+        self._last_full_model_id = full_model_id or ""
         normalized = normalize_model_id(full_model_id) or ""
         base, variant = split_model_variant(normalized)
         self.model_selector.blockSignals(True)
