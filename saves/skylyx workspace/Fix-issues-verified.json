@@ -235,6 +235,33 @@
    "y": 700,
    "name": "Workflow finished",
    "message": "Issue workflow finished cleanly."
+  },
+  {
+   "node_type": "delete_file",
+   "id": "281b553d-8026-472f-bfb0-cafc07430895",
+   "label_index": 19,
+   "x": -1150,
+   "y": 400,
+   "name": "delete issue-taken.txt",
+   "filename": "issue-taken.txt"
+  },
+  {
+   "node_type": "delete_file",
+   "id": "2d74260f-a7df-4d60-a2c2-a5f62df0847a",
+   "label_index": 20,
+   "x": -800,
+   "y": 400,
+   "name": "delete pr-review.txt",
+   "filename": "pr-review.txt"
+  },
+  {
+   "node_type": "attention",
+   "id": "af826a82-6b1d-46fa-95a3-cfc135a2d30d",
+   "label_index": 21,
+   "x": 400,
+   "y": 900,
+   "name": "Finished - leftovers reported",
+   "message": "The issue loop finished, but the working tree still had uncommitted changes that did not come from this workflow. They are summarised in leftover-work.txt. Nothing was deleted."
   }
  ],
  "connections": [
@@ -314,11 +341,6 @@
    "to": "e2f1ff61-40e6-48d6-90b9-15ebd6383ef2"
   },
   {
-   "from": "e2f1ff61-40e6-48d6-90b9-15ebd6383ef2",
-   "to": "383b5fcc-a8f2-4eb4-be5c-0e7f0e5927b1",
-   "source_port": "done"
-  },
-  {
    "from": "383b5fcc-a8f2-4eb4-be5c-0e7f0e5927b1",
    "to": "e4b96bd0-c350-48ae-a0a4-46bc63089901",
    "source_port": "false"
@@ -327,9 +349,26 @@
    "from": "383b5fcc-a8f2-4eb4-be5c-0e7f0e5927b1",
    "to": "ee03d87e-728a-4e92-b5d8-fb96c9c103c0",
    "source_port": "true"
+  },
+  {
+   "from": "e2f1ff61-40e6-48d6-90b9-15ebd6383ef2",
+   "to": "281b553d-8026-472f-bfb0-cafc07430895",
+   "source_port": "done"
+  },
+  {
+   "from": "281b553d-8026-472f-bfb0-cafc07430895",
+   "to": "2d74260f-a7df-4d60-a2c2-a5f62df0847a"
+  },
+  {
+   "from": "2d74260f-a7df-4d60-a2c2-a5f62df0847a",
+   "to": "383b5fcc-a8f2-4eb4-be5c-0e7f0e5927b1"
+  },
+  {
+   "from": "ee03d87e-728a-4e92-b5d8-fb96c9c103c0",
+   "to": "af826a82-6b1d-46fa-95a3-cfc135a2d30d"
   }
  ],
- "node_counter": 18,
+ "node_counter": 21,
  "start_pos": [
   -1800.0,
   0.0
